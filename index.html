@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Robux Gacha - 1/2 Chance Host Edition</title>
+    <title>Robux Gacha - Offline Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -44,6 +44,7 @@
             width: 10px;
             height: 10px;
             animation: fall 3s linear infinite;
+            z-index: 210;
         }
         @keyframes fall {
             to { transform: translateY(100vh) rotate(360deg); }
@@ -95,32 +96,14 @@
             font-weight: 900;
             margin-left: 4px;
         }
-        
-        /* Loading Overlay for Auth */
-        #loading-overlay {
-            position: fixed;
-            inset: 0;
-            background: white;
-            z-index: 1000;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 1rem;
-        }
     </style>
 </head>
 <body class="flex items-center justify-center">
 
-    <div id="loading-overlay">
-        <div class="w-12 h-12 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin"></div>
-        <p class="text-slate-400 font-bold text-sm">接続中...</p>
-    </div>
-
     <div id="copy-toast" class="copy-toast">URLをコピーしました！</div>
 
-    <!-- Winner Screen (Self) -->
-    <div id="winner-self-screen" class="fixed inset-0 z-[200] hidden flex flex-col items-center justify-center p-6 text-center bg-white overflow-y-auto">
+    <!-- Winner Screen -->
+    <div id="winner-screen" class="fixed inset-0 z-[200] hidden flex flex-col items-center justify-center p-6 text-center bg-white overflow-y-auto">
         <div class="absolute inset-0 overflow-hidden pointer-events-none" id="confetti-container"></div>
         <div class="relative z-10 space-y-6 fade-in max-w-sm w-full">
             <div class="text-7xl">🎉</div>
@@ -130,38 +113,18 @@
                 <div class="p-5 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 roblox-shadow">
                     <p class="text-slate-700 font-black text-base">スクリーンショットを保存して<br>報告してください</p>
                 </div>
-                <button onclick="hostResetRoom()" class="host-only hidden w-full bg-red-500 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95">
-                    <i class="fas fa-sync-alt mr-2"></i>現在の部屋をリセット
+                <button onclick="resetGame()" class="w-full bg-red-500 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95">
+                    <i class="fas fa-sync-alt mr-2"></i>もう一度遊ぶ
                 </button>
-                <button onclick="createNewRoom()" class="host-only hidden w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 mt-2">
+                <button onclick="createNewRoom()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 mt-2">
                     <i class="fas fa-plus mr-2"></i>新しい部屋を作成
                 </button>
-                <p class="viewer-only text-slate-400 text-[10px] font-bold">※ホストがリセットするまでお待ちください</p>
             </div>
-        </div>
-    </div>
-
-    <!-- Winner Screen (Others) -->
-    <div id="winner-other-screen" class="fixed inset-0 z-[200] hidden flex flex-col items-center justify-center p-6 text-center bg-white/90 backdrop-blur-md">
-        <div class="space-y-6 max-w-sm w-full bg-white p-8 rounded-[3rem] roblox-shadow border-4 border-blue-100">
-            <div class="text-6xl">💎</div>
-            <h2 class="text-2xl font-black text-slate-800">ガチャ終了</h2>
-            <div class="p-4 bg-blue-50 rounded-3xl">
-                <p id="external-winner-name" class="text-[#00A2FF] font-black text-xl underline"></p>
-                <p class="text-slate-600 font-bold mt-1">が当選しました！</p>
-            </div>
-            <button onclick="hostResetRoom()" class="host-only hidden w-full bg-red-500 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95">
-                <i class="fas fa-sync-alt mr-2"></i>部屋をリセット
-            </button>
-            <button onclick="createNewRoom()" class="host-only hidden w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 mt-2">
-                <i class="fas fa-plus mr-2"></i>新しい部屋を作成
-            </button>
-            <p class="viewer-only text-slate-400 text-xs font-medium">次のゲーム開始までお待ちください</p>
         </div>
     </div>
 
     <!-- Entry Overlay -->
-    <div id="entry-overlay" class="fixed inset-0 z-[100] bg-white hidden items-center justify-center p-4">
+    <div id="entry-overlay" class="fixed inset-0 z-[100] bg-white flex items-center justify-center p-4">
         <div class="max-w-md w-full bg-white border-2 border-slate-100 p-8 rounded-[2.5rem] shadow-2xl text-center space-y-8">
             <div class="w-20 h-20 bg-blue-50 text-[#00A2FF] rounded-3xl flex items-center justify-center mx-auto text-4xl rotate-3 roblox-shadow">
                 <i class="fas fa-gamepad"></i>
@@ -171,7 +134,7 @@
                 <p class="text-sm text-slate-400 font-bold">名前を入力してスタート</p>
             </div>
             <input type="text" id="username-input" placeholder="名前を入力..." maxlength="12" class="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-5 text-center text-xl font-bold focus:outline-none focus:border-blue-400">
-            <button id="entry-btn" class="w-full btn-blue text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95">
+            <button id="entry-btn" onclick="joinGame()" class="w-full btn-blue text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95">
                 ゲーム開始
             </button>
         </div>
@@ -181,12 +144,12 @@
     <div id="main-content" class="main-container opacity-0 transition-opacity duration-500 pointer-events-none">
         <header class="p-3 bg-white roblox-shadow z-40">
             <div class="flex justify-between items-center px-2">
-                <div id="room-header" class="flex items-center gap-2 cursor-pointer active:opacity-50 transition-opacity">
+                <div id="room-header" onclick="createNewRoom()" class="flex items-center gap-2 cursor-pointer active:opacity-50 transition-opacity">
                     <div class="bg-blue-400 w-2.5 h-2.5 rounded-full animate-pulse"></div>
                     <div class="flex flex-col">
                         <div class="flex items-center">
                             <span id="room-id-display" class="font-black text-xs text-blue-500 tracking-tight leading-none">ROOM: #---</span>
-                            <span id="host-badge" class="host-badge hidden">HOST</span>
+                            <span class="host-badge">HOST</span>
                         </div>
                     </div>
                 </div>
@@ -236,10 +199,12 @@
 
             <div class="bg-white h-[220px] rounded-[2rem] roblox-shadow overflow-hidden flex flex-col">
                 <div class="p-3 px-5 border-b border-slate-50 flex justify-between items-center bg-white/50">
-                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">ライブ履歴</span>
+                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">履歴 (ローカル)</span>
                     <span id="current-user-display" class="text-[10px] text-blue-500 font-black"></span>
                 </div>
-                <div id="log-container" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar"></div>
+                <div id="log-container" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                    <div class="p-4 text-center text-slate-300 text-xs font-bold">履歴はありません</div>
+                </div>
             </div>
         </div>
 
@@ -251,92 +216,29 @@
         </div>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, onSnapshot, addDoc, query, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        // GitHub環境などの外部環境向けにFirebase設定が注入されていない場合の回避策
-        let firebaseConfig;
-        try {
-            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        } catch (e) {
-            console.error("Firebase config error:", e);
-        }
-
-        if (!firebaseConfig) {
-            document.body.innerHTML = `
-                <div class="p-8 text-center bg-white rounded-3xl shadow-xl">
-                    <h1 class="text-red-500 font-black mb-4">設定エラー</h1>
-                    <p class="text-sm text-slate-600">Firebaseの設定が見つかりません。<br>GitHub等にアップロードする場合、正しい設定を注入する必要があります。</p>
-                </div>
-            `;
-            throw new Error("Missing Firebase Configuration");
-        }
-
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'robux-gacha-v1-prod';
-
+    <script>
         let clicks = 0;
         const CLICKS_NEEDED = 10;
         let username = "";
-        let isHost = false;
-        let userId = "";
         let currentRoomId = "";
-        let roomResetAt = 0;
+        let logs = [];
 
-        // Auth initialization with retry logic
-        const initAuth = async (retryCount = 0) => {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (error) {
-                console.error("Auth error:", error);
-                if (retryCount < 5) {
-                    const delay = Math.pow(2, retryCount) * 1000;
-                    setTimeout(() => initAuth(retryCount + 1), delay);
-                }
-            }
+        // ページ読み込み時の初期化
+        window.onload = () => {
+            setupRoom();
         };
-
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                userId = user.uid;
-                document.getElementById('loading-overlay').style.display = 'none';
-                document.getElementById('entry-overlay').style.display = 'flex';
-                setupRoom();
-            } else {
-                initAuth();
-            }
-        });
 
         function setupRoom() {
             let hash = window.location.hash.replace('#', '');
             if (!hash) {
                 hash = "ROOM-" + Math.random().toString(36).substring(2, 7).toUpperCase();
                 window.location.hash = hash;
-                isHost = true;
-                localStorage.setItem('host_' + hash, 'true');
-            } else {
-                isHost = localStorage.getItem('host_' + hash) === 'true';
             }
             currentRoomId = hash;
             document.getElementById('room-id-display').innerText = `ROOM: ${currentRoomId}`;
-            
-            if (isHost) {
-                document.getElementById('host-badge').classList.remove('hidden');
-                document.getElementById('room-header').onclick = createNewRoom;
-            }
-            
-            document.getElementById('entry-btn').onclick = joinGame;
         }
 
-        async function joinGame() {
+        function joinGame() {
             const input = document.getElementById('username-input');
             const name = input.value.trim();
             if (!name) return;
@@ -346,80 +248,9 @@
             document.getElementById('entry-overlay').style.display = 'none';
             document.getElementById('main-content').classList.replace('opacity-0', 'opacity-100');
             document.getElementById('main-content').classList.remove('pointer-events-none');
-            
-            startSync();
         }
 
-        function startSync() {
-            if (isHost) {
-                document.querySelectorAll('.host-only').forEach(el => el.classList.remove('hidden'));
-                document.querySelectorAll('.viewer-only').forEach(el => el.classList.add('hidden'));
-            }
-
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
-            onSnapshot(roomRef, (snapshot) => {
-                if (!snapshot.exists()) {
-                    if (isHost) setDoc(roomRef, { winner: null, resetAt: Date.now() });
-                    return;
-                }
-                const data = snapshot.data();
-                
-                if (data.resetAt > roomResetAt) {
-                    if (roomResetAt !== 0) {
-                        clicks = 0;
-                        updateUI();
-                        resetGacha();
-                        hideWinnerScreens();
-                    }
-                    roomResetAt = data.resetAt;
-                }
-
-                if (data.winner) {
-                    if (data.winner.userId === userId) {
-                        showWinnerSelf(data.winner.name);
-                    } else {
-                        showWinnerOther(data.winner.name);
-                    }
-                } else {
-                    hideWinnerScreens();
-                }
-            }, (err) => console.error("Firestore error:", err));
-
-            const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId, 'logs');
-            onSnapshot(logsRef, (snapshot) => {
-                let logs = [];
-                snapshot.forEach(doc => logs.push(doc.data()));
-                logs.sort((a, b) => b.timestamp - a.timestamp);
-                renderLogs(logs);
-            }, (err) => console.error("Logs error:", err));
-        }
-
-        function renderLogs(logs) {
-            const logContainer = document.getElementById('log-container');
-            if (logs.length === 0) {
-                logContainer.innerHTML = `<div class="p-4 text-center text-slate-300 text-xs font-bold">待機中...</div>`;
-                return;
-            }
-            logContainer.innerHTML = logs.slice(0, 20).map(log => `
-                <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 fade-in">
-                    <div class="flex items-center gap-2">
-                        <span class="text-[8px] text-slate-400 font-black">${log.timeStr}</span>
-                        <span class="font-black text-slate-700 text-[11px]">@${log.user}</span>
-                    </div>
-                    <span class="${log.isWin ? 'text-blue-500 font-black' : 'text-slate-400 font-bold'} text-[10px]">
-                        ${log.isWin ? '💎 WINNER' : 'MISS'}
-                    </span>
-                </div>
-            `).join('');
-        }
-
-        async function handleButtonClick() {
-            if (!userId) return; // Wait for auth
-            
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
-            const snap = await getDoc(roomRef);
-            if (snap.exists() && snap.data().winner) return;
-
+        function handleButtonClick() {
             if (!document.getElementById('state-result').classList.contains('hidden')) return;
             if (!document.getElementById('state-spinning').classList.contains('hidden')) return;
 
@@ -435,41 +266,43 @@
             }
         }
 
-        async function processGacha() {
+        function processGacha() {
             showState('spinning');
             
-            setTimeout(async () => {
+            setTimeout(() => {
+                // 当選確率 1/2 (50%)
                 const isWin = Math.random() <= 0.5;
-                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
                 
-                const snap = await getDoc(roomRef);
-                if (snap.exists() && snap.data().winner) {
-                    resetGacha();
-                    return;
-                }
-
                 if (isWin) {
-                    await updateDoc(roomRef, { 
-                        winner: { name: username, userId: userId, timestamp: Date.now() } 
-                    });
-                    await addLog(true);
+                    addLog(true);
+                    showWinner();
                 } else {
-                    await addLog(false);
+                    addLog(false);
                     showState('result');
                     setTimeout(() => resetGacha(), 1200);
                 }
             }, 800);
         }
 
-        async function addLog(isWin) {
-            const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId, 'logs');
-            await addDoc(logsRef, {
-                user: username,
-                userId: userId,
-                isWin: isWin,
-                timestamp: Date.now(),
-                timeStr: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-            });
+        function addLog(isWin) {
+            const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            logs.unshift({ user: username, isWin, timeStr });
+            renderLogs();
+        }
+
+        function renderLogs() {
+            const logContainer = document.getElementById('log-container');
+            logContainer.innerHTML = logs.slice(0, 20).map(log => `
+                <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 fade-in">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[8px] text-slate-400 font-black">${log.timeStr}</span>
+                        <span class="font-black text-slate-700 text-[11px]">@${log.user}</span>
+                    </div>
+                    <span class="${log.isWin ? 'text-blue-500 font-black' : 'text-slate-400 font-bold'} text-[10px]">
+                        ${log.isWin ? '💎 WINNER' : 'MISS'}
+                    </span>
+                </div>
+            `).join('');
         }
 
         function updateUI() {
@@ -477,22 +310,6 @@
             const progress = (clicks / CLICKS_NEEDED) * 100;
             document.getElementById('progress-bar').style.width = `${progress}%`;
             document.getElementById('btn-text').innerText = clicks === 0 ? `タップしてチャージ` : `チャージ中... ${Math.round(progress)}%`;
-        }
-
-        window.createNewRoom = function() {
-            if (!isHost) return;
-            if (!confirm('新しい部屋を作成しますか？')) return;
-            
-            const newHash = "ROOM-" + Math.random().toString(36).substring(2, 7).toUpperCase();
-            localStorage.setItem('host_' + newHash, 'true');
-            window.location.hash = newHash;
-            location.reload();
-        }
-
-        window.hostResetRoom = async function() {
-            if (!isHost) return;
-            const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
-            await updateDoc(roomRef, { winner: null, resetAt: Date.now() });
         }
 
         function showState(state) {
@@ -504,19 +321,21 @@
 
         function resetGacha() { updateUI(); showState('idle'); }
 
-        function showWinnerSelf(name) {
-            document.getElementById('winner-self-screen').classList.remove('hidden');
+        function showWinner() {
+            document.getElementById('winner-screen').classList.remove('hidden');
             createConfetti();
         }
 
-        function showWinnerOther(name) {
-            document.getElementById('external-winner-name').innerText = name;
-            document.getElementById('winner-other-screen').classList.remove('hidden');
+        function resetGame() {
+            document.getElementById('winner-screen').classList.add('hidden');
+            resetGacha();
         }
 
-        function hideWinnerScreens() {
-            document.getElementById('winner-self-screen').classList.add('hidden');
-            document.getElementById('winner-other-screen').classList.add('hidden');
+        function createNewRoom() {
+            if (!confirm('新しい部屋を作成しますか？')) return;
+            const newHash = "ROOM-" + Math.random().toString(36).substring(2, 7).toUpperCase();
+            window.location.hash = newHash;
+            location.reload();
         }
 
         function createConfetti() {
@@ -532,7 +351,7 @@
             }
         }
 
-        window.copyInviteLink = function() {
+        function copyInviteLink() {
             const url = window.location.href;
             const temp = document.createElement('input');
             document.body.appendChild(temp);
@@ -544,8 +363,6 @@
             toast.style.display = 'block';
             setTimeout(() => { toast.style.display = 'none'; }, 2000);
         }
-
-        window.handleButtonClick = handleButtonClick;
     </script>
 </body>
 </html>
