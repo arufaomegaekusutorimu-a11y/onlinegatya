@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Robux Gacha - P2P Sync Mode</title>
+    <title>Robux Gacha - P2P Individual Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -56,7 +56,7 @@
             </div>
             <div class="space-y-2">
                 <h2 class="text-2xl font-black text-slate-800">プレイヤー登録</h2>
-                <p class="text-sm text-slate-400 font-bold">P2Pリアルタイム同期モード</p>
+                <p class="text-sm text-slate-400 font-bold">個人チャージ / 同期リザルト</p>
             </div>
             <input type="text" id="username-input" placeholder="名前を入力..." maxlength="12" class="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-5 text-center text-xl font-bold focus:outline-none focus:border-blue-400">
             <button id="entry-btn" onclick="joinGame()" class="w-full btn-blue text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95">
@@ -98,7 +98,7 @@
                     <div class="relative">
                         <div class="text-6xl mb-3 drop-shadow-lg">💎</div>
                         <h2 class="text-2xl font-black text-slate-800">ROBUX GACHA</h2>
-                        <div class="inline-block mt-2 bg-red-100 text-red-600 px-3 py-1 rounded-full text-[10px] font-black border border-red-200">当選確率: 1/499</div>
+                        <div class="inline-block mt-2 bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full text-[10px] font-black border border-yellow-200">当選確率: 1/2</div>
                     </div>
                     <div class="px-6">
                         <div class="w-full bg-slate-100 rounded-full h-3 p-0.5 overflow-hidden shadow-inner">
@@ -110,7 +110,7 @@
                     <div class="w-20 h-20 bg-blue-50 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border-2 border-blue-100">
                         <i class="fas fa-cube text-4xl text-blue-400 gacha-spin"></i>
                     </div>
-                    <p class="text-lg font-black animate-pulse text-blue-500">抽選中...</p>
+                    <p id="spinner-text" class="text-lg font-black animate-pulse text-blue-500">抽選中...</p>
                 </div>
                 <div id="state-result" class="hidden text-center fade-in space-y-2">
                     <div class="text-[10px] font-black px-4 py-1.5 rounded-full inline-block bg-slate-100 text-slate-400 uppercase">Miss</div>
@@ -120,7 +120,7 @@
 
             <div class="bg-white h-[220px] rounded-[2rem] roblox-shadow overflow-hidden flex flex-col">
                 <div class="p-3 px-5 border-b border-slate-50 flex justify-between items-center bg-white/50">
-                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">ライブ履歴 (同期)</span>
+                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">全員の履歴</span>
                     <span id="current-user-display" class="text-[10px] text-blue-500 font-black"></span>
                 </div>
                 <div id="log-container" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar"></div>
@@ -140,18 +140,17 @@
         let connections = [];
         let isHost = false;
         let username = "";
-        let clicks = 0;
+        let clicks = 0; // 個別チャージ
         const CLICKS_NEEDED = 10;
         let logs = [];
         let winner = null;
+        let isSpinningGlobal = false;
 
         const urlParams = new URLSearchParams(window.location.search);
         const hostId = urlParams.get('room');
 
-        // Initialize Peer
         function initPeer() {
             peer = new Peer();
-
             peer.on('open', (id) => {
                 document.getElementById('connection-status').innerText = hostId ? "ホストに接続中..." : "接続待機中...";
                 if (hostId) {
@@ -170,8 +169,7 @@
                 connections.push(conn);
                 setupConn(conn);
                 updatePeerCount();
-                // Send current state to new player
-                conn.send({ type: 'init', clicks, logs, winner });
+                conn.send({ type: 'init', logs, winner, isSpinningGlobal });
             });
         }
 
@@ -190,21 +188,19 @@
             });
             conn.on('data', (data) => {
                 if (data.type === 'init') {
-                    clicks = data.clicks;
                     logs = data.logs;
                     winner = data.winner;
-                    updateUI();
+                    isSpinningGlobal = data.isSpinningGlobal;
                     renderLogs();
                     if (winner) showWinner(winner);
-                }
-                if (data.type === 'click') {
-                    clicks = data.clicks;
-                    updateUI();
+                    if (isSpinningGlobal) showState('spinning', "誰かが抽選中...");
                 }
                 if (data.type === 'gacha_start') {
-                    showState('spinning');
+                    isSpinningGlobal = true;
+                    showState('spinning', `${data.user}が抽選中...`);
                 }
                 if (data.type === 'gacha_result') {
+                    isSpinningGlobal = false;
                     logs = data.logs;
                     renderLogs();
                     if (data.isWin) {
@@ -217,10 +213,10 @@
                 }
                 if (data.type === 'reset') {
                     winner = null;
+                    isSpinningGlobal = false;
                     clicks = 0;
                     document.getElementById('winner-screen').classList.add('hidden');
                     resetGachaUI();
-                    updateUI();
                 }
             });
             conn.on('close', () => {
@@ -247,31 +243,33 @@
         }
 
         function handleDraw() {
-            if (winner) return;
+            if (winner || isSpinningGlobal) return;
             if (!document.getElementById('state-spinning').classList.contains('hidden')) return;
             if (!document.getElementById('state-result').classList.contains('hidden')) return;
 
             clicks++;
             updateUI();
-            broadcast({ type: 'click', clicks });
 
             if (clicks >= CLICKS_NEEDED) {
                 clicks = 0;
-                broadcast({ type: 'click', clicks });
+                updateUI();
                 startGacha();
             }
         }
 
         function startGacha() {
-            showState('spinning');
-            broadcast({ type: 'gacha_start' });
+            isSpinningGlobal = true;
+            showState('spinning', "抽選中...");
+            broadcast({ type: 'gacha_start', user: username });
 
             setTimeout(() => {
-                const isWin = Math.random() < (1 / 499);
+                // 当選確率 1/2
+                const isWin = Math.random() < 0.5;
                 const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 const logEntry = { user: username, isWin, timeStr };
                 logs.unshift(logEntry);
 
+                isSpinningGlobal = false;
                 if (isWin) {
                     winner = username;
                     broadcast({ type: 'gacha_result', isWin: true, winner: username, logs });
@@ -282,7 +280,7 @@
                     setTimeout(resetGachaUI, 1200);
                 }
                 renderLogs();
-            }, 800);
+            }, 1000);
         }
 
         function updateUI() {
@@ -292,11 +290,17 @@
             document.getElementById('btn-text').innerText = clicks === 0 ? `タップしてチャージ` : `チャージ中... ${Math.round(progress)}%`;
         }
 
-        function showState(state) {
+        function showState(state, text = "抽選中...") {
             document.getElementById('state-idle').classList.add('hidden');
             document.getElementById('state-spinning').classList.add('hidden');
             document.getElementById('state-result').classList.add('hidden');
-            document.getElementById('state-' + state).classList.remove('hidden');
+            
+            const stateEl = document.getElementById('state-' + state);
+            stateEl.classList.remove('hidden');
+            
+            if (state === 'spinning') {
+                document.getElementById('spinner-text').innerText = text;
+            }
         }
 
         function resetGachaUI() {
@@ -333,6 +337,7 @@
         function requestReset() {
             if (!isHost) return;
             winner = null;
+            isSpinningGlobal = false;
             clicks = 0;
             logs = [];
             renderLogs();
