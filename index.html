@@ -95,9 +95,27 @@
             font-weight: 900;
             margin-left: 4px;
         }
+        
+        /* Loading Overlay for Auth */
+        #loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: white;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+        }
     </style>
 </head>
 <body class="flex items-center justify-center">
+
+    <div id="loading-overlay">
+        <div class="w-12 h-12 border-4 border-blue-100 border-t-blue-500 rounded-full animate-spin"></div>
+        <p class="text-slate-400 font-bold text-sm">接続中...</p>
+    </div>
 
     <div id="copy-toast" class="copy-toast">URLをコピーしました！</div>
 
@@ -143,7 +161,7 @@
     </div>
 
     <!-- Entry Overlay -->
-    <div id="entry-overlay" class="fixed inset-0 z-[100] bg-white flex items-center justify-center p-4">
+    <div id="entry-overlay" class="fixed inset-0 z-[100] bg-white hidden items-center justify-center p-4">
         <div class="max-w-md w-full bg-white border-2 border-slate-100 p-8 rounded-[2.5rem] shadow-2xl text-center space-y-8">
             <div class="w-20 h-20 bg-blue-50 text-[#00A2FF] rounded-3xl flex items-center justify-center mx-auto text-4xl rotate-3 roblox-shadow">
                 <i class="fas fa-gamepad"></i>
@@ -160,7 +178,7 @@
     </div>
 
     <!-- Main Content -->
-    <div id="main-content" class="main-container opacity-0 transition-opacity duration-500">
+    <div id="main-content" class="main-container opacity-0 transition-opacity duration-500 pointer-events-none">
         <header class="p-3 bg-white roblox-shadow z-40">
             <div class="flex justify-between items-center px-2">
                 <div id="room-header" class="flex items-center gap-2 cursor-pointer active:opacity-50 transition-opacity">
@@ -238,11 +256,28 @@
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, onSnapshot, addDoc, query, limit } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = JSON.parse(__firebase_config);
+        // GitHub環境などの外部環境向けにFirebase設定が注入されていない場合の回避策
+        let firebaseConfig;
+        try {
+            firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        } catch (e) {
+            console.error("Firebase config error:", e);
+        }
+
+        if (!firebaseConfig) {
+            document.body.innerHTML = `
+                <div class="p-8 text-center bg-white rounded-3xl shadow-xl">
+                    <h1 class="text-red-500 font-black mb-4">設定エラー</h1>
+                    <p class="text-sm text-slate-600">Firebaseの設定が見つかりません。<br>GitHub等にアップロードする場合、正しい設定を注入する必要があります。</p>
+                </div>
+            `;
+            throw new Error("Missing Firebase Configuration");
+        }
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'robux-gacha-host-v1';
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'robux-gacha-v1-prod';
 
         let clicks = 0;
         const CLICKS_NEEDED = 10;
@@ -252,18 +287,28 @@
         let currentRoomId = "";
         let roomResetAt = 0;
 
-        // Auth
-        const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                await signInAnonymously(auth);
+        // Auth initialization with retry logic
+        const initAuth = async (retryCount = 0) => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth error:", error);
+                if (retryCount < 5) {
+                    const delay = Math.pow(2, retryCount) * 1000;
+                    setTimeout(() => initAuth(retryCount + 1), delay);
+                }
             }
         };
 
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 userId = user.uid;
+                document.getElementById('loading-overlay').style.display = 'none';
+                document.getElementById('entry-overlay').style.display = 'flex';
                 setupRoom();
             } else {
                 initAuth();
@@ -300,6 +345,7 @@
             document.getElementById('current-user-display').innerText = `@${username}`;
             document.getElementById('entry-overlay').style.display = 'none';
             document.getElementById('main-content').classList.replace('opacity-0', 'opacity-100');
+            document.getElementById('main-content').classList.remove('pointer-events-none');
             
             startSync();
         }
@@ -337,7 +383,7 @@
                 } else {
                     hideWinnerScreens();
                 }
-            });
+            }, (err) => console.error("Firestore error:", err));
 
             const logsRef = collection(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId, 'logs');
             onSnapshot(logsRef, (snapshot) => {
@@ -345,7 +391,7 @@
                 snapshot.forEach(doc => logs.push(doc.data()));
                 logs.sort((a, b) => b.timestamp - a.timestamp);
                 renderLogs(logs);
-            });
+            }, (err) => console.error("Logs error:", err));
         }
 
         function renderLogs(logs) {
@@ -368,6 +414,8 @@
         }
 
         async function handleButtonClick() {
+            if (!userId) return; // Wait for auth
+            
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
             const snap = await getDoc(roomRef);
             if (snap.exists() && snap.data().winner) return;
@@ -391,7 +439,6 @@
             showState('spinning');
             
             setTimeout(async () => {
-                // 当選確率 1/2
                 const isWin = Math.random() <= 0.5;
                 const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
                 
@@ -432,10 +479,9 @@
             document.getElementById('btn-text').innerText = clicks === 0 ? `タップしてチャージ` : `チャージ中... ${Math.round(progress)}%`;
         }
 
-        // ホスト用：部屋の作成
         window.createNewRoom = function() {
             if (!isHost) return;
-            if (!confirm('新しい部屋を作成しますか？現在の履歴は消えません（新しい部屋に移行します）。')) return;
+            if (!confirm('新しい部屋を作成しますか？')) return;
             
             const newHash = "ROOM-" + Math.random().toString(36).substring(2, 7).toUpperCase();
             localStorage.setItem('host_' + newHash, 'true');
@@ -443,7 +489,6 @@
             location.reload();
         }
 
-        // ホスト用：同じ部屋でのリセット
         window.hostResetRoom = async function() {
             if (!isHost) return;
             const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', currentRoomId);
