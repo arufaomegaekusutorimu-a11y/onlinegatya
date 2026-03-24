@@ -20,7 +20,7 @@
             font-family: 'Inter', sans-serif; 
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
-            overflow: hidden; /* 画面全体のスクロールを禁止 */
+            overflow: hidden; 
             background-color: var(--roblox-bg);
             color: var(--roblox-text);
             height: 100vh;
@@ -88,7 +88,6 @@
             display: none;
         }
 
-        /* 画面に収めるための調整 */
         .main-container {
             height: 100vh;
             display: flex;
@@ -97,6 +96,14 @@
             margin: 0 auto;
             width: 100%;
         }
+
+        .host-interactive {
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        .host-interactive:hover {
+            opacity: 0.7;
+        }
     </style>
 </head>
 <body class="flex items-center justify-center">
@@ -104,38 +111,49 @@
     <div id="copy-toast" class="copy-toast">リンクをコピーしました！</div>
 
     <!-- Winner Screen (Self) -->
-    <div id="winner-self-screen" class="fixed inset-0 z-[200] hidden flex flex-col items-center justify-center p-6 text-center bg-white">
-        <!-- 紙吹雪 -->
+    <div id="winner-self-screen" class="fixed inset-0 z-[200] hidden flex flex-col items-center justify-center p-6 text-center bg-white overflow-y-auto">
         <div class="absolute inset-0 overflow-hidden pointer-events-none" id="confetti-container"></div>
-        <div class="relative z-10 space-y-8 fade-in">
-            <div class="text-8xl">🎉</div>
-            <h1 class="text-5xl font-black text-[#00A2FF] tracking-tighter winner-glow px-8 py-3 rounded-3xl bg-blue-50 border-4 border-blue-400">WINNER!</h1>
-            <div class="space-y-6">
-                <div class="space-y-2">
-                    <p class="text-3xl font-black text-slate-800">1,000 ROBUX 当選！</p>
-                    <!-- ここを「名前」が勝者ですに動的変更 -->
-                    <p id="winner-self-message" class="text-slate-500 font-bold">おめでとうございます！</p>
+        <div class="relative z-10 space-y-6 fade-in max-w-sm w-full">
+            <div class="text-7xl">🎉</div>
+            <h1 class="text-4xl font-black text-[#00A2FF] tracking-tighter winner-glow px-6 py-3 rounded-3xl bg-blue-50 border-4 border-blue-400">WINNER!</h1>
+            
+            <div class="space-y-4">
+                <div class="space-y-1">
+                    <p class="text-2xl font-black text-slate-800">ROBUXプレゼント 当選！</p>
+                    <p id="winner-self-message" class="text-slate-500 font-bold text-sm">おめでとうございます！</p>
                 </div>
-                <div class="p-6 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 roblox-shadow">
-                    <div class="text-blue-500 text-3xl mb-2"><i class="fab fa-discord"></i></div>
-                    <p class="text-slate-700 font-black text-lg">この画面をスクリーンショットして<br>Discordに貼り付けてください</p>
-                    <p class="text-slate-400 text-xs mt-2 font-bold tracking-tight">※リセットは管理者が行います</p>
+                
+                <div class="p-5 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 roblox-shadow">
+                    <div class="text-blue-500 text-2xl mb-2"><i class="fab fa-discord"></i></div>
+                    <p class="text-slate-700 font-black text-base">この画面をスクリーンショットして<br>Discordに貼り付けてください</p>
                 </div>
+
+                <!-- Host Only Reset Button -->
+                <button id="winner-host-reset-btn" onclick="hostReset()" class="hidden w-full bg-red-500 text-white py-4 rounded-2xl font-black text-lg transition-all shadow-lg active:scale-95">
+                    <i class="fas fa-sync-alt mr-2"></i>部屋をリセットして再開
+                </button>
+                
+                <p id="winner-wait-msg" class="text-slate-400 text-[10px] font-bold tracking-tight">※管理者がリセットするまでお待ちください</p>
             </div>
         </div>
     </div>
 
     <!-- Winner Screen (Others) -->
     <div id="winner-other-screen" class="fixed inset-0 z-[200] hidden flex flex-col items-center justify-center p-6 text-center lock-screen">
-        <div class="space-y-6 max-w-sm w-full bg-white p-10 rounded-[3rem] roblox-shadow border-4 border-blue-100">
-            <div class="text-7xl">💎</div>
-            <h2 class="text-3xl font-black text-slate-800 leading-tight">ガチャ終了</h2>
-            <div class="p-5 bg-blue-50 rounded-3xl">
-                <p id="external-winner-name" class="text-[#00A2FF] font-black text-2xl underline"></p>
+        <div class="space-y-6 max-w-sm w-full bg-white p-8 rounded-[3rem] roblox-shadow border-4 border-blue-100">
+            <div class="text-6xl">💎</div>
+            <h2 class="text-2xl font-black text-slate-800 leading-tight">ガチャ終了</h2>
+            <div class="p-4 bg-blue-50 rounded-3xl">
+                <p id="external-winner-name" class="text-[#00A2FF] font-black text-xl underline"></p>
                 <p class="text-slate-600 font-bold mt-1">が当選しました！</p>
             </div>
-            <p class="text-slate-400 text-sm font-medium">当選者による申告を待っています。<br>管理者がリセットするまでお待ちください。</p>
-            <div class="text-slate-300 text-xs italic font-bold">Waiting for moderator...</div>
+            
+            <!-- Host Only Reset Button -->
+            <button id="other-host-reset-btn" onclick="hostReset()" class="hidden w-full bg-red-500 text-white py-4 rounded-2xl font-black text-lg transition-all shadow-lg active:scale-95">
+                <i class="fas fa-sync-alt mr-2"></i>部屋をリセットして再開
+            </button>
+
+            <p id="other-wait-msg" class="text-slate-400 text-xs font-medium">当選者による申告を待っています。<br>管理者がリセットするまでお待ちください。</p>
         </div>
     </div>
 
@@ -163,11 +181,9 @@
             <div class="flex justify-between items-center px-2">
                 <div class="flex items-center gap-3">
                     <div class="bg-blue-400 w-2.5 h-2.5 rounded-full animate-pulse"></div>
-                    <div class="flex flex-col">
+                    <!-- ホストのみ新規作成可能にするためIDクリック可能に -->
+                    <div id="room-id-container" class="flex flex-col">
                         <span id="room-id-display" class="font-black text-xs text-blue-500 tracking-tight leading-none">ROOM: #---</span>
-                        <button id="host-reset-btn" onclick="hostReset()" class="hidden text-[8px] font-black text-red-400 hover:text-red-500 mt-0.5">
-                            <i class="fas fa-sync-alt"></i> 管理用リセット
-                        </button>
                     </div>
                 </div>
                 <div class="flex items-center gap-3">
@@ -186,13 +202,13 @@
 
         <!-- Main Body -->
         <div class="flex-1 flex flex-col p-4 overflow-hidden gap-4">
-            <!-- Gacha Card (Size auto-adjusted) -->
+            <!-- Gacha Card -->
             <div id="gacha-display" class="bg-white flex-1 min-h-[220px] rounded-[2.5rem] border-4 border-white roblox-shadow relative overflow-hidden flex flex-col items-center justify-center p-6">
                 <!-- Idle State -->
                 <div id="state-idle" class="w-full text-center space-y-6">
                     <div class="relative">
                         <div class="text-6xl mb-3 drop-shadow-lg">💎</div>
-                        <h2 class="text-2xl font-black text-slate-800">1,000 ROBUX</h2>
+                        <h2 class="text-2xl font-black text-slate-800">ROBUXプレゼント</h2>
                         <div class="inline-block mt-2 bg-blue-50 text-blue-500 px-3 py-1 rounded-full text-[10px] font-black border border-blue-100">
                             当選確率: 1/2
                         </div>
@@ -248,23 +264,31 @@
         let myId = Math.random().toString(36).substring(7);
         
         const ITEMS = [
-            { name: '1,000 Robux', isWin: true },
+            { name: 'ROBUXプレゼント', isWin: true },
             { name: 'ハズレ', isWin: false },
         ];
 
         window.addEventListener('load', () => {
             let hash = window.location.hash;
             if (!hash) {
-                isHost = true;
-                const newRoomId = "room-" + Math.random().toString(36).substring(2, 7).toUpperCase();
-                window.location.hash = newRoomId;
-                sessionStorage.setItem('is_host_' + newRoomId, 'true');
+                createNewRoom();
             } else {
                 if (sessionStorage.getItem('is_host_' + hash.replace('#', ''))) {
                     isHost = true;
                 }
             }
         });
+
+        function createNewRoom() {
+            isHost = true;
+            const newRoomId = "room-" + Math.random().toString(36).substring(2, 7).toUpperCase();
+            window.location.hash = newRoomId;
+            sessionStorage.setItem('is_host_' + newRoomId, 'true');
+            // すでに参加中の場合はリロードして反映
+            if (username) {
+                location.reload();
+            }
+        }
 
         function entryGame() {
             const input = document.getElementById('username-input');
@@ -282,8 +306,20 @@
             document.getElementById('room-id-display').innerText = `ROOM: ${currentRoom.replace('#', '')}`;
             
             if (isHost) {
-                document.getElementById('host-reset-btn').classList.remove('hidden');
                 document.getElementById('host-share-btn').classList.remove('hidden');
+                document.getElementById('winner-host-reset-btn').classList.remove('hidden');
+                document.getElementById('other-host-reset-btn').classList.remove('hidden');
+                document.getElementById('winner-wait-msg').classList.add('hidden');
+                document.getElementById('other-wait-msg').classList.add('hidden');
+
+                // ルームID表示をクリック可能にする
+                const idContainer = document.getElementById('room-id-container');
+                idContainer.classList.add('host-interactive');
+                idContainer.onclick = () => {
+                    if (confirm('新しいルームを作成しますか？\n(現在の進行状況は破棄されます)')) {
+                        createNewRoom();
+                    }
+                };
             }
 
             checkWinnerState();
@@ -315,7 +351,6 @@
         }
 
         function showWinnerSelfScreen(winnerName) {
-            // 当選者の名前に合わせてメッセージを更新
             document.getElementById('winner-self-message').innerText = `おめでとうございます！「${winnerName}」が勝者です。`;
             document.getElementById('winner-self-screen').classList.remove('hidden');
             createConfetti();
@@ -444,7 +479,7 @@
         }
 
         function hostReset() {
-            if (!confirm('この部屋のデータを全削除しますか？')) return;
+            if (!confirm('部屋のデータをリセットして、新しいゲームを開始しますか？')) return;
             localStorage.removeItem('winner_' + currentRoom);
             localStorage.removeItem('logs_' + currentRoom);
             localStorage.setItem('reset_' + currentRoom, Date.now());
