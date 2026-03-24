@@ -20,9 +20,10 @@
             font-family: 'Inter', sans-serif; 
             touch-action: manipulation;
             -webkit-tap-highlight-color: transparent;
-            overflow: hidden;
+            overflow: hidden; /* 画面全体のスクロールを禁止 */
             background-color: var(--roblox-bg);
             color: var(--roblox-text);
+            height: 100vh;
         }
 
         .gacha-spin { animation: spin 0.5s linear infinite; }
@@ -86,25 +87,35 @@
             z-index: 300;
             display: none;
         }
+
+        /* 画面に収めるための調整 */
+        .main-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            max-width: 450px;
+            margin: 0 auto;
+            width: 100%;
+        }
     </style>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="flex items-center justify-center">
 
     <div id="copy-toast" class="copy-toast">リンクをコピーしました！</div>
 
     <!-- Winner Screen (Self) -->
     <div id="winner-self-screen" class="fixed inset-0 z-[200] hidden flex flex-col items-center justify-center p-6 text-center bg-white">
+        <!-- 紙吹雪 -->
         <div class="absolute inset-0 overflow-hidden pointer-events-none" id="confetti-container"></div>
-        <div class="relative z-10 space-y-8 animate-bounce">
+        <div class="relative z-10 space-y-8 fade-in">
             <div class="text-8xl">🎉</div>
             <h1 class="text-5xl font-black text-[#00A2FF] tracking-tighter winner-glow px-8 py-3 rounded-3xl bg-blue-50 border-4 border-blue-400">WINNER!</h1>
             <div class="space-y-6">
                 <div class="space-y-2">
                     <p class="text-3xl font-black text-slate-800">1,000 ROBUX 当選！</p>
-                    <p class="text-slate-500 font-bold">おめでとうございます！あなたが勝者です。</p>
+                    <!-- ここを「名前」が勝者ですに動的変更 -->
+                    <p id="winner-self-message" class="text-slate-500 font-bold">おめでとうございます！</p>
                 </div>
-                
-                <!-- Discord案内 -->
                 <div class="p-6 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 roblox-shadow">
                     <div class="text-blue-500 text-3xl mb-2"><i class="fab fa-discord"></i></div>
                     <p class="text-slate-700 font-black text-lg">この画面をスクリーンショットして<br>Discordに貼り付けてください</p>
@@ -146,88 +157,85 @@
     </div>
 
     <!-- Main Content -->
-    <div id="main-content" class="flex flex-col flex-1 opacity-0 transition-opacity duration-500 overflow-y-auto">
-        <!-- Roblox Style Header -->
-        <header class="p-4 bg-white roblox-shadow sticky top-0 z-40">
-            <div class="max-w-md mx-auto flex justify-between items-center">
+    <div id="main-content" class="main-container opacity-0 transition-opacity duration-500">
+        <!-- Header -->
+        <header class="p-3 bg-white roblox-shadow z-40">
+            <div class="flex justify-between items-center px-2">
                 <div class="flex items-center gap-3">
-                    <div class="bg-blue-400 w-3 h-3 rounded-full animate-pulse"></div>
+                    <div class="bg-blue-400 w-2.5 h-2.5 rounded-full animate-pulse"></div>
                     <div class="flex flex-col">
-                        <span id="room-id-display" class="font-black text-sm text-blue-500 tracking-tight leading-none">ROOM: #---</span>
-                        <!-- ホストのみに表示されるリセットボタン -->
-                        <button id="host-reset-btn" onclick="hostReset()" class="hidden text-[9px] font-black text-red-400 hover:text-red-500 transition-colors text-left flex items-center gap-1 mt-1">
-                            <i class="fas fa-sync-alt"></i> 部屋をリセット（管理用）
+                        <span id="room-id-display" class="font-black text-xs text-blue-500 tracking-tight leading-none">ROOM: #---</span>
+                        <button id="host-reset-btn" onclick="hostReset()" class="hidden text-[8px] font-black text-red-400 hover:text-red-500 mt-0.5">
+                            <i class="fas fa-sync-alt"></i> 管理用リセット
                         </button>
                     </div>
                 </div>
-                <div class="flex items-center gap-4">
-                    <!-- ホストのみに表示される共有ボタン -->
-                    <button id="host-share-btn" onclick="copyInviteLink()" class="hidden bg-blue-50 text-blue-500 px-3 py-1.5 rounded-full text-[10px] font-black border border-blue-100 active:scale-90 transition-transform">
-                        招待リンクをコピー
+                <div class="flex items-center gap-3">
+                    <button id="host-share-btn" onclick="copyInviteLink()" class="hidden bg-blue-50 text-blue-500 px-2 py-1 rounded-full text-[9px] font-black border border-blue-100">
+                        招待コピー
                     </button>
                     <div class="text-right">
-                        <div class="text-[10px] text-slate-400 font-black uppercase">POWER</div>
-                        <div class="text-lg font-black text-blue-500">
-                            <i class="fas fa-bolt-lightning mr-1"></i><span id="click-count">0</span>/10
+                        <div class="text-[9px] text-slate-400 font-black">POWER</div>
+                        <div class="text-sm font-black text-blue-500">
+                            <i class="fas fa-bolt-lightning mr-0.5"></i><span id="click-count">0</span>/10
                         </div>
                     </div>
                 </div>
             </div>
         </header>
 
-        <main class="flex-1 flex flex-col p-5 space-y-5 max-w-md mx-auto w-full pb-36">
-            <!-- Gacha Display Card -->
-            <div id="gacha-display" class="bg-white aspect-square rounded-[3rem] border-4 border-white roblox-shadow relative overflow-hidden flex flex-col items-center justify-center p-8">
+        <!-- Main Body -->
+        <div class="flex-1 flex flex-col p-4 overflow-hidden gap-4">
+            <!-- Gacha Card (Size auto-adjusted) -->
+            <div id="gacha-display" class="bg-white flex-1 min-h-[220px] rounded-[2.5rem] border-4 border-white roblox-shadow relative overflow-hidden flex flex-col items-center justify-center p-6">
                 <!-- Idle State -->
-                <div id="state-idle" class="w-full text-center space-y-8">
-                    <div class="relative py-4">
-                        <div class="text-7xl mb-6 drop-shadow-lg">💎</div>
-                        <h2 class="text-3xl font-black text-slate-800">1,000 ROBUX</h2>
-                        <div class="inline-block mt-3 bg-blue-50 text-blue-500 px-4 py-1.5 rounded-full text-xs font-black border border-blue-100">
+                <div id="state-idle" class="w-full text-center space-y-6">
+                    <div class="relative">
+                        <div class="text-6xl mb-3 drop-shadow-lg">💎</div>
+                        <h2 class="text-2xl font-black text-slate-800">1,000 ROBUX</h2>
+                        <div class="inline-block mt-2 bg-blue-50 text-blue-500 px-3 py-1 rounded-full text-[10px] font-black border border-blue-100">
                             当選確率: 1/2
                         </div>
                     </div>
                     <div class="px-6">
-                        <div class="w-full bg-slate-100 rounded-full h-4 p-1 overflow-hidden shadow-inner">
+                        <div class="w-full bg-slate-100 rounded-full h-3 p-0.5 overflow-hidden shadow-inner">
                             <div id="progress-bar" class="btn-blue h-full w-0 rounded-full transition-all duration-200"></div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Spinning State -->
-                <div id="state-spinning" class="hidden text-center space-y-8">
-                    <div class="w-24 h-24 bg-blue-50 rounded-[2rem] flex items-center justify-center mx-auto shadow-inner border-2 border-blue-100">
-                        <i class="fas fa-cube text-5xl text-blue-400 gacha-spin"></i>
+                <div id="state-spinning" class="hidden text-center space-y-4">
+                    <div class="w-20 h-20 bg-blue-50 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border-2 border-blue-100">
+                        <i class="fas fa-cube text-4xl text-blue-400 gacha-spin"></i>
                     </div>
-                    <p class="text-2xl font-black animate-pulse text-blue-500">ガチャを回しています...</p>
+                    <p class="text-lg font-black animate-pulse text-blue-500">ガチャを回しています...</p>
                 </div>
 
                 <!-- Result State -->
-                <div id="state-result" class="hidden text-center fade-in">
-                    <div id="result-rarity" class="text-sm font-black mb-4 px-5 py-2 rounded-full inline-block">MISS</div>
-                    <h2 id="result-name" class="text-5xl font-black mb-8 text-slate-300 leading-tight">残念...</h2>
-                    <button onclick="resetGacha()" class="px-10 py-4 bg-slate-100 text-slate-500 rounded-2xl text-sm font-black hover:bg-slate-200 transition-colors">もう一度チャージ</button>
+                <div id="state-result" class="hidden text-center fade-in space-y-2">
+                    <div id="result-rarity" class="text-[10px] font-black px-4 py-1.5 rounded-full inline-block">MISS</div>
+                    <h2 id="result-name" class="text-4xl font-black text-slate-300 leading-tight">ハズレ</h2>
+                    <p class="text-[10px] text-slate-400 font-bold italic">自動でリセット中...</p>
                 </div>
             </div>
 
-            <!-- Logs Section -->
-            <div class="bg-white rounded-[2rem] roblox-shadow overflow-hidden flex flex-col max-h-[220px]">
-                <div class="p-4 px-6 border-b border-slate-50 flex justify-between items-center bg-white/50">
-                    <span class="text-xs font-black uppercase tracking-wider text-slate-400">アクティビティ</span>
-                    <span id="current-user-display" class="text-xs text-blue-500 font-black"></span>
+            <!-- Activity Logs -->
+            <div class="bg-white h-[180px] rounded-[2rem] roblox-shadow overflow-hidden flex flex-col">
+                <div class="p-3 px-5 border-b border-slate-50 flex justify-between items-center bg-white/50 sticky top-0">
+                    <span class="text-[10px] font-black uppercase tracking-wider text-slate-400">アクティビティ</span>
+                    <span id="current-user-display" class="text-[10px] text-blue-500 font-black"></span>
                 </div>
-                <div id="log-container" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar"></div>
+                <div id="log-container" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar"></div>
             </div>
-        </main>
+        </div>
 
-        <!-- Fixed Bottom Tap Area -->
-        <div id="bottom-bar" class="fixed bottom-0 left-0 right-0 p-5 pb-10 bg-gradient-to-t from-slate-100 to-transparent z-40">
-            <div class="max-w-md mx-auto">
-                <button id="draw-btn" onclick="handleButtonClick()" class="w-full group relative py-7 rounded-[2.5rem] text-2xl font-black btn-blue text-white shadow-xl active:scale-95 transition-all flex items-center justify-center gap-4">
-                    <span id="btn-text">タップしてチャージ</span>
-                    <i class="fas fa-bolt-lightning text-blue-200 animate-bounce"></i>
-                </button>
-            </div>
+        <!-- Footer Button -->
+        <div class="p-4 pt-0 pb-8 bg-transparent">
+            <button id="draw-btn" onclick="handleButtonClick()" class="w-full py-6 rounded-[2rem] text-xl font-black btn-blue text-white shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
+                <span id="btn-text">タップしてチャージ</span>
+                <i class="fas fa-bolt-lightning text-blue-200 animate-bounce"></i>
+            </button>
         </div>
     </div>
 
@@ -244,17 +252,14 @@
             { name: 'ハズレ', isWin: false },
         ];
 
-        // ページ読み込み時にホスト判定を行う
         window.addEventListener('load', () => {
             let hash = window.location.hash;
             if (!hash) {
-                // ハッシュがない = 自分が新規作成者
                 isHost = true;
                 const newRoomId = "room-" + Math.random().toString(36).substring(2, 7).toUpperCase();
                 window.location.hash = newRoomId;
                 sessionStorage.setItem('is_host_' + newRoomId, 'true');
             } else {
-                // ハッシュがある場合、sessionStorageにホストフラグがあるか確認
                 if (sessionStorage.getItem('is_host_' + hash.replace('#', ''))) {
                     isHost = true;
                 }
@@ -276,7 +281,6 @@
             currentRoom = window.location.hash;
             document.getElementById('room-id-display').innerText = `ROOM: ${currentRoom.replace('#', '')}`;
             
-            // ホスト用UIの表示切り替え
             if (isHost) {
                 document.getElementById('host-reset-btn').classList.remove('hidden');
                 document.getElementById('host-share-btn').classList.remove('hidden');
@@ -290,7 +294,6 @@
                     checkWinnerState();
                     loadLogs();
                 }
-                // 管理者がデータを消去した場合の検知
                 if (e.key === 'reset_' + currentRoom) {
                     location.reload();
                 }
@@ -301,7 +304,7 @@
             const winnerData = JSON.parse(localStorage.getItem('winner_' + currentRoom));
             if (winnerData) {
                 if (winnerData.userId === myId) {
-                    showWinnerSelfScreen();
+                    showWinnerSelfScreen(winnerData.name);
                 } else {
                     showWinnerOtherScreen(winnerData.name);
                 }
@@ -311,9 +314,10 @@
             }
         }
 
-        function showWinnerSelfScreen() {
-            const screen = document.getElementById('winner-self-screen');
-            screen.classList.remove('hidden');
+        function showWinnerSelfScreen(winnerName) {
+            // 当選者の名前に合わせてメッセージを更新
+            document.getElementById('winner-self-message').innerText = `おめでとうございます！「${winnerName}」が勝者です。`;
+            document.getElementById('winner-self-screen').classList.remove('hidden');
             createConfetti();
         }
 
@@ -326,7 +330,7 @@
             const container = document.getElementById('confetti-container');
             container.innerHTML = '';
             const colors = ['#00A2FF', '#FFFFFF', '#82D5FF', '#FFD700'];
-            for (let i = 0; i < 60; i++) {
+            for (let i = 0; i < 40; i++) {
                 const c = document.createElement('div');
                 c.className = 'confetti';
                 c.style.left = Math.random() * 100 + 'vw';
@@ -380,14 +384,15 @@
                     checkWinnerState();
                 } else {
                     saveLog(selected);
-                    const nameEl = document.getElementById('result-name');
-                    nameEl.innerText = "ハズレ";
-                    nameEl.className = "text-5xl font-black mb-8 text-slate-300 leading-tight";
                     const rarityEl = document.getElementById('result-rarity');
-                    rarityEl.className = "text-sm font-black mb-4 px-5 py-2 rounded-full inline-block bg-slate-100 text-slate-400";
+                    rarityEl.className = "text-[10px] font-black px-4 py-1.5 rounded-full inline-block bg-slate-100 text-slate-400";
                     rarityEl.innerText = "MISS";
                     showState('result');
                     loadLogs();
+                    
+                    setTimeout(() => {
+                        resetGacha();
+                    }, 1500);
                 }
             }, 1200);
         }
@@ -409,20 +414,21 @@
             const logs = JSON.parse(localStorage.getItem(key) || '[]');
             const container = document.getElementById('log-container');
             if (logs.length === 0) {
-                container.innerHTML = `<div class="p-8 text-center text-slate-300 font-bold">まだ履歴がありません</div>`;
+                container.innerHTML = `<div class="p-4 text-center text-slate-300 font-bold text-xs">履歴なし</div>`;
                 return;
             }
             container.innerHTML = logs.map(log => `
-                <div class="flex items-center justify-between p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                    <div class="flex items-center gap-3">
-                        <span class="text-[10px] text-slate-400 font-black">${log.time}</span>
-                        <span class="font-black text-slate-700">@${log.user}</span>
+                <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[8px] text-slate-400 font-black">${log.time}</span>
+                        <span class="font-black text-slate-700 text-[11px]">@${log.user}</span>
                     </div>
-                    <span class="${log.isWin ? 'text-blue-500 font-black' : 'text-slate-400 font-bold'} text-xs">
+                    <span class="${log.isWin ? 'text-blue-500 font-black' : 'text-slate-400 font-bold'} text-[10px]">
                         ${log.isWin ? 'WINNER!' : 'MISS'}
                     </span>
                 </div>
             `).join('');
+            container.scrollTop = 0;
         }
 
         function showState(stateName) {
@@ -437,17 +443,14 @@
             showState('idle'); 
         }
 
-        // 管理者用：ルームデータの完全リセット
         function hostReset() {
-            if (!confirm('この部屋の当選データとログをすべて削除してリセットしますか？')) return;
+            if (!confirm('この部屋のデータを全削除しますか？')) return;
             localStorage.removeItem('winner_' + currentRoom);
             localStorage.removeItem('logs_' + currentRoom);
-            // 他のブラウザにリロードを促すためのトリガー
             localStorage.setItem('reset_' + currentRoom, Date.now());
             location.reload();
         }
 
-        // 招待リンクのコピー
         function copyInviteLink() {
             const url = window.location.href;
             const tempInput = document.createElement('input');
