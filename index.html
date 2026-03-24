@@ -181,7 +181,6 @@
             <div class="flex justify-between items-center px-2">
                 <div class="flex items-center gap-3">
                     <div class="bg-blue-400 w-2.5 h-2.5 rounded-full animate-pulse"></div>
-                    <!-- ホストのみ新規作成可能にするためIDクリック可能に -->
                     <div id="room-id-container" class="flex flex-col">
                         <span id="room-id-display" class="font-black text-xs text-blue-500 tracking-tight leading-none">ROOM: #---</span>
                     </div>
@@ -210,7 +209,7 @@
                         <div class="text-6xl mb-3 drop-shadow-lg">💎</div>
                         <h2 class="text-2xl font-black text-slate-800">ROBUXプレゼント</h2>
                         <div class="inline-block mt-2 bg-blue-50 text-blue-500 px-3 py-1 rounded-full text-[10px] font-black border border-blue-100">
-                            当選確率: 1/2
+                            当選確率: 1/999
                         </div>
                     </div>
                     <div class="px-6">
@@ -273,6 +272,7 @@
             if (!hash) {
                 createNewRoom();
             } else {
+                currentRoom = hash;
                 if (sessionStorage.getItem('is_host_' + hash.replace('#', ''))) {
                     isHost = true;
                 }
@@ -282,9 +282,8 @@
         function createNewRoom() {
             isHost = true;
             const newRoomId = "room-" + Math.random().toString(36).substring(2, 7).toUpperCase();
-            window.location.hash = newRoomId;
             sessionStorage.setItem('is_host_' + newRoomId, 'true');
-            // すでに参加中の場合はリロードして反映
+            window.location.hash = newRoomId;
             if (username) {
                 location.reload();
             }
@@ -312,10 +311,10 @@
                 document.getElementById('winner-wait-msg').classList.add('hidden');
                 document.getElementById('other-wait-msg').classList.add('hidden');
 
-                // ルームID表示をクリック可能にする
                 const idContainer = document.getElementById('room-id-container');
                 idContainer.classList.add('host-interactive');
-                idContainer.onclick = () => {
+                idContainer.onclick = (e) => {
+                    e.preventDefault();
                     if (confirm('新しいルームを作成しますか？\n(現在の進行状況は破棄されます)')) {
                         createNewRoom();
                     }
@@ -409,8 +408,9 @@
                     return;
                 }
 
+                // 当選確率を 1/999 に設定
                 const rand = Math.random();
-                let selected = (rand <= 0.5) ? ITEMS[0] : ITEMS[1];
+                let selected = (rand <= (1 / 999)) ? ITEMS[0] : ITEMS[1];
 
                 if (selected.isWin) {
                     const winnerInfo = { name: username, userId: myId, time: Date.now() };
@@ -479,6 +479,7 @@
         }
 
         function hostReset() {
+            if (!isHost) return;
             if (!confirm('部屋のデータをリセットして、新しいゲームを開始しますか？')) return;
             localStorage.removeItem('winner_' + currentRoom);
             localStorage.removeItem('logs_' + currentRoom);
