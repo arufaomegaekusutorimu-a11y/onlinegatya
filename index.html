@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Robux Gacha - High Speed Sync</title>
+    <title>Robux Gacha - Realtime Full Sync</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -23,6 +23,8 @@
         .copy-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #393B3D; color: white; padding: 8px 24px; border-radius: 30px; font-size: 14px; z-index: 300; display: none; }
         .main-container { height: 100vh; display: flex; flex-direction: column; max-width: 450px; margin: 0 auto; width: 100%; }
         .host-badge { background: #FFD700; color: #8B4513; padding: 2px 6px; border-radius: 4px; font-size: 8px; font-weight: 900; margin-left: 4px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #CCD1D7; border-radius: 10px; }
     </style>
 </head>
 <body class="flex items-center justify-center">
@@ -55,7 +57,7 @@
             </div>
             <div class="space-y-2">
                 <h2 class="text-2xl font-black text-slate-800">プレイヤー登録</h2>
-                <p class="text-sm text-slate-400 font-bold">全員同時参加可能モード</p>
+                <p class="text-sm text-slate-400 font-bold">全員リアルタイム同期モード</p>
             </div>
             <input type="text" id="username-input" placeholder="名前を入力..." maxlength="12" class="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-5 text-center text-xl font-bold focus:outline-none focus:border-blue-400">
             <button id="entry-btn" onclick="joinGame()" class="w-full btn-blue text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95">
@@ -143,7 +145,7 @@
         const CLICKS_NEEDED = 10;
         let logs = [];
         let winner = null;
-        let pendingClaims = []; // ホストがミリ秒単位の判定に使用
+        let pendingClaims = []; 
 
         const urlParams = new URLSearchParams(window.location.search);
         const hostId = urlParams.get('room');
@@ -167,10 +169,18 @@
             peer.on('connection', (conn) => {
                 connections.push(conn);
                 setupConn(conn);
-                updatePeerCountDisplay();
-                conn.send({ type: 'init', logs, winner, peerCount: connections.length });
-                // 接続数更新を全員に通知
-                broadcast({ type: 'update_peers', count: connections.length });
+                // ホスト側：接続が増えたら全員に現在の状態を同期
+                if (isHost) {
+                    setTimeout(() => {
+                        broadcast({ 
+                            type: 'sync_all', 
+                            logs, 
+                            winner, 
+                            peerCount: connections.length + 1 // ホスト自身を含める
+                        });
+                        updatePeerCountDisplay(connections.length + 1);
+                    }, 500);
+                }
             });
         }
 
@@ -185,37 +195,31 @@
             conn.on('open', () => {
                 document.getElementById('status-dot').className = "bg-green-500 w-2.5 h-2.5 rounded-full";
                 document.getElementById('connection-status').innerText = "接続成功！";
-                updatePeerCountDisplay();
             });
+
             conn.on('data', (data) => {
-                if (data.type === 'init') {
+                // ホスト・ゲスト共通のデータ受信処理
+                if (data.type === 'sync_all') {
                     logs = data.logs;
                     winner = data.winner;
                     updatePeerCountDisplay(data.peerCount);
                     renderLogs();
                     if (winner) showWinner(winner);
                 }
-                if (data.type === 'update_peers') {
-                    updatePeerCountDisplay(data.count);
-                }
+
                 if (data.type === 'gacha_claim') {
-                    // ホスト側のロジック: 当選者の先着判定
-                    if (isHost && !winner) {
-                        handleHostFairJudgement(data);
+                    if (isHost && !winner) handleHostFairJudgement(data);
+                }
+
+                if (data.type === 'miss_notice') {
+                    if (isHost) {
+                        // ホストがハズレ履歴を追加して全員に再配信
+                        logs.unshift(data.logEntry);
+                        broadcast({ type: 'sync_all', logs, winner, peerCount: connections.length + 1 });
+                        renderLogs();
                     }
                 }
-                if (data.type === 'miss_notice') {
-                    // 誰かがハズレたとき全員の履歴を更新
-                    logs = data.logs;
-                    renderLogs();
-                }
-                if (data.type === 'broadcast_win') {
-                    // ホストが決定した最終勝者を全員に通知
-                    winner = data.winner;
-                    logs = data.logs;
-                    renderLogs();
-                    showWinner(winner);
-                }
+
                 if (data.type === 'reset') {
                     winner = null;
                     clicks = 0;
@@ -225,24 +229,22 @@
                     renderLogs();
                 }
             });
+
             conn.on('close', () => {
                 connections = connections.filter(c => c !== conn);
-                updatePeerCountDisplay();
-                if (isHost) broadcast({ type: 'update_peers', count: connections.length });
+                if (isHost) {
+                    updatePeerCountDisplay(connections.length + 1);
+                    broadcast({ type: 'sync_all', logs, winner, peerCount: connections.length + 1 });
+                }
             });
         }
 
-        // ホストによるミリ秒単位の判定
         function handleHostFairJudgement(claim) {
-            if (winner) return; // 既に決まっている場合は無視
-
+            if (winner) return;
             pendingClaims.push(claim);
             
-            // 0.1秒待って最も早かった人を確定（ネットワーク遅延のゆらぎを吸収）
             setTimeout(() => {
                 if (winner || pendingClaims.length === 0) return;
-
-                // タイムスタンプ順にソート
                 pendingClaims.sort((a, b) => a.timestamp - b.timestamp);
                 const trueWinner = pendingClaims[0];
                 
@@ -250,7 +252,7 @@
                 const timeStr = new Date(trueWinner.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 logs.unshift({ user: winner, isWin: true, timeStr });
                 
-                broadcast({ type: 'broadcast_win', winner, logs });
+                broadcast({ type: 'sync_all', logs, winner, peerCount: connections.length + 1 });
                 showWinner(winner);
                 renderLogs();
                 pendingClaims = [];
@@ -258,7 +260,7 @@
         }
 
         function updatePeerCountDisplay(count) {
-            const displayCount = count !== undefined ? count : connections.length;
+            const displayCount = count !== undefined ? count : (connections.length + (isHost ? 1 : 0));
             document.getElementById('peer-count-display').innerText = `接続数: ${displayCount}`;
         }
 
@@ -301,21 +303,20 @@
                 const timeStr = new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
                 if (isWin) {
-                    // 当選申請をホストに送信
                     const claim = { type: 'gacha_claim', user: username, timestamp };
-                    if (isHost) {
-                        handleHostFairJudgement(claim);
-                    } else {
-                        broadcast(claim);
-                    }
+                    if (isHost) handleHostFairJudgement(claim);
+                    else broadcast(claim);
                 } else {
-                    // ハズレは即座に自分と全員に通知
                     const logEntry = { user: username, isWin: false, timeStr };
-                    logs.unshift(logEntry);
-                    renderLogs();
+                    if (isHost) {
+                        logs.unshift(logEntry);
+                        broadcast({ type: 'sync_all', logs, winner, peerCount: connections.length + 1 });
+                        renderLogs();
+                    } else {
+                        broadcast({ type: 'miss_notice', logEntry });
+                    }
                     showState('result');
                     setTimeout(resetGachaUI, 1200);
-                    broadcast({ type: 'miss_notice', logs });
                 }
             }, 800);
         }
@@ -343,7 +344,11 @@
 
         function renderLogs() {
             const container = document.getElementById('log-container');
-            container.innerHTML = logs.slice(0, 20).map(log => `
+            if (logs.length === 0) {
+                container.innerHTML = `<div class="p-4 text-center text-slate-300 text-xs font-bold">履歴はありません</div>`;
+                return;
+            }
+            container.innerHTML = logs.slice(0, 30).map(log => `
                 <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 fade-in">
                     <div class="flex items-center gap-2">
                         <span class="text-[8px] text-slate-400 font-black">${log.timeStr}</span>
@@ -357,7 +362,7 @@
         }
 
         function showWinner(name) {
-            document.getElementById('winner-name-display').innerText = `@${name} が最速で当選しました！`;
+            document.getElementById('winner-name-display').innerText = `@${name} が当選しました！`;
             document.getElementById('winner-screen').classList.remove('hidden');
             if (name === username) {
                 document.getElementById('winner-title').innerText = "YOU WIN!";
