@@ -35,7 +35,6 @@
         .roblox-shadow { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .btn-blue { background-color: var(--roblox-blue); }
         .btn-blue:active { filter: brightness(0.9); }
-        .btn-miss { background-color: #f44336 !important; }
         
         .copy-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #393B3D; color: white; padding: 8px 24px; border-radius: 30px; font-size: 14px; z-index: 400; display: none; }
         .main-container { height: 100vh; display: flex; flex-direction: column; max-width: 450px; margin: 0 auto; width: 100%; }
@@ -83,6 +82,13 @@
             </div>
             
             <div class="space-y-4">
+                <!-- Gacha Name Input -->
+                <div class="space-y-2">
+                    <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">ガチャの名前</label>
+                    <input type="text" id="gacha-name-input" placeholder="例: Robux Gacha" maxlength="20" class="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-3 text-lg font-bold text-slate-700 focus:outline-none focus:border-blue-400">
+                </div>
+
+                <!-- Probability Input -->
                 <div class="space-y-2">
                     <label class="text-[10px] font-black text-slate-400 uppercase tracking-widest">当選確率 (1/X)</label>
                     <div class="flex items-center gap-3">
@@ -94,12 +100,12 @@
                 <div class="h-px bg-slate-100"></div>
 
                 <button id="start-game-btn" onclick="startGame()" class="w-full bg-blue-500 text-white py-4 rounded-2xl font-black shadow-lg active:scale-95 flex items-center justify-center gap-2">
-                    <i class="fas fa-play"></i> ゲームを開始する
+                    <i class="fas fa-play"></i> 設定を適用して開始
                 </button>
             </div>
 
             <button onclick="closeSettings()" class="w-full bg-slate-100 text-slate-500 py-4 rounded-2xl font-black active:scale-95">
-                閉じる
+                キャンセル
             </button>
         </div>
     </div>
@@ -179,7 +185,7 @@
                 <div id="state-idle" class="w-full space-y-6">
                     <div class="relative">
                         <div class="text-6xl mb-3 drop-shadow-lg">💎</div>
-                        <h2 class="text-2xl font-black text-slate-800 uppercase">Robux Gacha</h2>
+                        <h2 id="gacha-title-display" class="text-2xl font-black text-slate-800 uppercase">Robux Gacha</h2>
                         <!-- Instruction text -->
                         <div id="tap-instruction" class="text-[11px] font-black text-blue-500 bg-blue-50 px-4 py-1.5 rounded-full inline-flex items-center gap-2 mt-1 animate-pulse border border-blue-100">
                             <i class="fas fa-hand-pointer"></i> タップしてチャージ
@@ -230,6 +236,7 @@
         let logs = [];
         let totalDraws = 0;
         let currentProb = 999; 
+        let gachaName = "Robux Gacha";
         let winner = null;
         let gameActive = false;
         let pendingClaims = []; 
@@ -254,6 +261,7 @@
                     document.getElementById('status-dot').className = "bg-green-500 w-2.5 h-2.5 rounded-full";
                     document.getElementById('connection-status').innerText = "準備完了";
                     document.getElementById('prob-input').value = currentProb;
+                    document.getElementById('gacha-name-input').value = gachaName;
                 }
             });
 
@@ -268,6 +276,7 @@
                             winner, 
                             totalDraws,
                             currentProb,
+                            gachaName,
                             gameActive,
                             peerCount: connections.length + 1
                         });
@@ -297,11 +306,13 @@
                     winner = data.winner;
                     totalDraws = data.totalDraws;
                     currentProb = data.currentProb;
+                    gachaName = data.gachaName || "Robux Gacha";
                     gameActive = data.gameActive;
                     
                     updatePeerCountDisplay(data.peerCount);
                     updateTotalDrawsDisplay(totalDraws);
                     updateProbUI();
+                    updateGachaNameUI();
                     renderLogs();
                     
                     if (winner) showWinner(winner);
@@ -321,15 +332,17 @@
                     if (isHost) {
                         totalDraws++;
                         logs.unshift(data.logEntry);
-                        broadcast({ type: 'sync_all', logs, winner, totalDraws, currentProb, gameActive, peerCount: connections.length + 1 });
+                        broadcast({ type: 'sync_all', logs, winner, totalDraws, currentProb, gachaName, gameActive, peerCount: connections.length + 1 });
                         updateTotalDrawsDisplay(totalDraws);
                         renderLogs();
                     }
                 }
 
-                if (data.type === 'prob_change') {
+                if (data.type === 'settings_change') {
                     currentProb = data.currentProb;
+                    gachaName = data.gachaName;
                     updateProbUI();
+                    updateGachaNameUI();
                 }
 
                 if (data.type === 'reset') {
@@ -360,10 +373,29 @@
 
         function startGame() {
             if (!isHost) return;
+            
+            // Apply settings
+            const probVal = parseInt(document.getElementById('prob-input').value);
+            if (probVal > 0 && probVal <= 9999) currentProb = probVal;
+            
+            const nameVal = document.getElementById('gacha-name-input').value.trim();
+            if (nameVal) gachaName = nameVal;
+
+            gameActive = true;
+            updateProbUI();
+            updateGachaNameUI();
             closeSettings();
-            gameActive = true; 
-            broadcast({ type: 'game_started' });
-            broadcast({ type: 'sync_all', logs, winner, totalDraws, currentProb, gameActive, peerCount: connections.length + 1 });
+            
+            broadcast({ 
+                type: 'sync_all', 
+                logs, 
+                winner, 
+                totalDraws, 
+                currentProb, 
+                gachaName, 
+                gameActive, 
+                peerCount: connections.length + 1 
+            });
         }
 
         function handleHostFairJudgement(claim) {
@@ -378,7 +410,7 @@
                 totalDraws++; 
                 const timeStr = new Date(trueWinner.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 logs.unshift({ user: winner, isWin: true, timeStr });
-                broadcast({ type: 'sync_all', logs, winner, totalDraws, currentProb, gameActive, peerCount: connections.length + 1 });
+                broadcast({ type: 'sync_all', logs, winner, totalDraws, currentProb, gachaName, gameActive, peerCount: connections.length + 1 });
                 showWinner(winner);
                 updateTotalDrawsDisplay(totalDraws);
                 renderLogs();
@@ -388,21 +420,23 @@
 
         function openSettings() {
             if (!isHost) return;
+            document.getElementById('prob-input').value = currentProb;
+            document.getElementById('gacha-name-input').value = gachaName;
             document.getElementById('settings-modal').classList.remove('hidden');
         }
 
         function closeSettings() {
-            const val = parseInt(document.getElementById('prob-input').value);
-            if (val > 0 && val <= 9999) {
-                currentProb = val;
-                updateProbUI();
-                if (isHost) broadcast({ type: 'prob_change', currentProb });
-            }
             document.getElementById('settings-modal').classList.add('hidden');
         }
 
         function updateProbUI() {
             document.getElementById('prob-badge').innerText = `確率 1/${currentProb}`;
+        }
+
+        function updateGachaNameUI() {
+            document.getElementById('gacha-title-display').innerText = gachaName;
+            // Also update tab title for immersion
+            document.title = `${gachaName} - P2P Sync`;
         }
 
         function updatePeerCountDisplay(count) {
@@ -459,7 +493,7 @@
                     if (isHost) {
                         totalDraws++;
                         logs.unshift(logEntry);
-                        broadcast({ type: 'sync_all', logs, winner, totalDraws, currentProb, gameActive, peerCount: connections.length + 1 });
+                        broadcast({ type: 'sync_all', logs, winner, totalDraws, currentProb, gachaName, gameActive, peerCount: connections.length + 1 });
                         updateTotalDrawsDisplay(totalDraws);
                         renderLogs();
                     } else {
@@ -533,22 +567,20 @@
             const instruction = document.getElementById('winner-instruction');
             
             if (name === username) {
-                // 自分自身が当選した場合
                 title.innerText = "当選";
                 title.style.color = "#00A2FF";
                 title.style.borderColor = "#60a5fa";
                 title.classList.add('winner-glow');
-                emoji.innerText = "🎉"; // 自分の当選画面のみクラッカー
+                emoji.innerText = "🎉"; 
                 nameDisplay.innerText = "当選おめでとう！";
                 instruction.classList.remove('hidden');
                 createConfetti();
             } else {
-                // 他の誰かが当選（自分は落選）した場合
                 title.innerText = "終了";
                 title.style.color = "#94a3b8";
                 title.style.borderColor = "#cbd5e1";
                 title.classList.remove('winner-glow');
-                emoji.innerText = "🙇"; // 落選時はおじぎ絵文字に変更
+                emoji.innerText = "🙇"; 
                 nameDisplay.innerText = `@${name} が当選しました`;
                 instruction.classList.add('hidden');
             }
