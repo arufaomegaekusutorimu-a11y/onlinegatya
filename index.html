@@ -2,168 +2,147 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Robux Gacha Simulator - Room Mode</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Robux Gacha Mobile</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; }
+        body { 
+            font-family: 'Inter', sans-serif; 
+            touch-action: manipulation; /* 連打時のズーム防止 */
+            -webkit-tap-highlight-color: transparent;
+        }
         .gacha-spin { animation: spin 0.5s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        
+        /* スムーズなスクロール */
+        .custom-scrollbar::-webkit-scrollbar { width: 3px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+
         .winner-anim { animation: celebrate 0.5s ease-out infinite alternate; }
-        @keyframes celebrate { from { transform: scale(1); } to { transform: scale(1.1); } }
-        .copy-toast { animation: fade-up 2s forwards; }
-        @keyframes fade-up { 0% { opacity: 0; transform: translateY(10px); } 10% { opacity: 1; transform: translateY(0); } 90% { opacity: 1; } 100% { opacity: 0; } }
+        @keyframes celebrate { from { transform: scale(1); } to { transform: scale(1.05); } }
+
         .click-pulse { animation: pulse-sm 0.1s ease-out; }
-        @keyframes pulse-sm { 0% { transform: scale(1); } 50% { transform: scale(0.95); } 100% { transform: scale(1); } }
+        @keyframes pulse-sm { 0% { transform: scale(1); } 50% { transform: scale(0.92); } 100% { transform: scale(1); } }
+
+        /* スマホ向けボトムシート風アニメーション */
+        .slide-up { animation: slide-up 0.3s ease-out; }
+        @keyframes slide-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col overflow-x-hidden">
 
     <!-- Entry Overlay -->
-    <div id="entry-overlay" class="fixed inset-0 z-[100] bg-slate-950 flex items-center justify-center p-6">
-        <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-3xl shadow-2xl text-center space-y-6">
-            <div class="w-20 h-20 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto text-3xl">
+    <div id="entry-overlay" class="fixed inset-0 z-[100] bg-slate-950 flex items-center justify-center p-4">
+        <div class="max-w-md w-full bg-slate-900 border border-slate-800 p-6 rounded-[2rem] shadow-2xl text-center space-y-6">
+            <div class="w-16 h-16 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center mx-auto text-2xl rotate-3">
                 <i class="fas fa-user-tag"></i>
             </div>
-            <div class="space-y-2">
-                <h2 class="text-2xl font-bold">参加者登録</h2>
-                <p class="text-sm text-slate-400">ガチャを回すための名前を入力してください</p>
+            <div class="space-y-1">
+                <h2 class="text-xl font-bold">参加者登録</h2>
+                <p class="text-xs text-slate-400">ガチャで使用する名前を入力</p>
             </div>
-            <input type="text" id="username-input" placeholder="名前を入力..." maxlength="12" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-center text-lg focus:outline-none focus:border-emerald-500 transition-colors">
-            <button onclick="entryGame()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-xl font-bold text-lg transition-all shadow-lg shadow-emerald-900/20">
-                ルームに入る
+            <input type="text" id="username-input" placeholder="名前を入力..." maxlength="12" class="w-full bg-slate-950 border border-slate-700 rounded-2xl px-4 py-4 text-center text-lg focus:outline-none focus:border-emerald-500 transition-colors">
+            <button onclick="entryGame()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-2xl font-bold text-lg transition-all shadow-lg active:scale-95 text-white">
+                ゲーム開始
             </button>
         </div>
     </div>
 
-    <div id="main-content" class="p-4 md:p-8 opacity-0 transition-opacity duration-500">
-        <div class="max-w-5xl mx-auto space-y-6">
-            <!-- Room Info Bar -->
-            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+    <!-- Main Content -->
+    <div id="main-content" class="flex flex-col flex-1 opacity-0 transition-opacity duration-500">
+        <!-- Slim Header -->
+        <header class="p-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-40">
+            <div class="max-w-md mx-auto flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <div class="bg-emerald-500 w-2 h-2 rounded-full animate-pulse"></div>
+                    <span id="room-id-display" class="font-mono text-[10px] font-bold text-emerald-400 tracking-tighter">#---</span>
+                </div>
                 <div class="flex items-center gap-3">
-                    <div class="bg-emerald-500/20 text-emerald-400 p-2 rounded-lg">
-                        <i class="fas fa-door-open"></i>
+                    <div class="text-right">
+                        <div class="text-[9px] text-slate-500 font-bold uppercase">CHARGE</div>
+                        <div class="text-sm font-mono font-bold text-emerald-400">
+                            <i class="fas fa-bolt mr-1"></i><span id="click-count">0</span>/10
+                        </div>
                     </div>
-                    <div>
-                        <div class="text-[10px] text-slate-500 uppercase font-bold tracking-widest">現在のルーム</div>
-                        <div id="room-id-display" class="font-mono text-sm font-bold text-emerald-400">#LOADING...</div>
+                    <button onclick="shareRoom()" class="w-8 h-8 flex items-center justify-center bg-slate-800 rounded-full text-xs">
+                        <i class="fas fa-link"></i>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <main class="flex-1 flex flex-col p-4 space-y-4 max-w-md mx-auto w-full pb-32">
+            <!-- Gacha Screen -->
+            <div id="gacha-display" class="bg-slate-900 aspect-square rounded-[2.5rem] border border-slate-800 relative overflow-hidden flex flex-col items-center justify-center p-6 shadow-2xl">
+                <!-- Background Deco -->
+                <div class="absolute inset-0 opacity-20 pointer-events-none">
+                    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-emerald-500 rounded-full blur-[80px]"></div>
+                </div>
+
+                <!-- Idle State -->
+                <div id="state-idle" class="w-full text-center space-y-6">
+                    <div id="room-status" class="w-full"></div>
+                    
+                    <div class="relative py-4">
+                        <div class="text-5xl mb-4">💎</div>
+                        <h2 class="text-xl font-black text-white">1,000 ROBUX</h2>
+                        <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold mt-1">Winning Probability: 1/5</p>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="px-4">
+                        <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                            <div id="progress-bar" class="bg-emerald-500 h-full w-0 transition-all duration-200"></div>
+                        </div>
                     </div>
                 </div>
-                <div class="flex items-center gap-4">
-                    <div class="text-right hidden sm:block">
-                        <div class="text-[10px] text-slate-500 font-bold uppercase tracking-widest">ログイン中</div>
-                        <div id="current-user-display" class="text-sm font-bold">---</div>
+
+                <!-- Spinning State -->
+                <div id="state-spinning" class="hidden text-center space-y-6">
+                    <div class="w-20 h-20 bg-slate-800 rounded-3xl flex items-center justify-center mx-auto shadow-inner">
+                        <i class="fas fa-dice-d20 text-4xl text-emerald-400 gacha-spin"></i>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="shareRoom()" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition-all">
-                            <i class="fas fa-link"></i> 招待リンク
-                        </button>
-                        <button onclick="createNewRoom()" class="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition-all">
-                            <i class="fas fa-plus"></i> 新規作成
-                        </button>
-                    </div>
+                    <p class="text-lg font-bold animate-pulse text-emerald-400">ROLLING...</p>
+                </div>
+
+                <!-- Result State -->
+                <div id="state-result" class="hidden text-center slide-up">
+                    <div id="result-rarity" class="text-[10px] font-black mb-3 px-3 py-1 rounded-full inline-block">当たり</div>
+                    <h2 id="result-name" class="text-4xl font-black mb-6 text-white leading-tight">ITEM NAME</h2>
+                    <button onclick="resetGacha()" class="w-full px-8 py-4 bg-slate-800 hover:bg-slate-700 rounded-2xl text-sm font-bold">
+                        戻る
+                    </button>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <!-- Main Section -->
-                <div class="lg:col-span-2 space-y-6">
-                    <header class="flex justify-between items-center bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-xl">
-                        <div>
-                            <h1 class="text-2xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-500 bg-clip-text text-transparent">
-                                ROBUX GIVEAWAY
-                            </h1>
-                            <p class="text-xs text-slate-400 mt-1">10回クリックで1回抽選！</p>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-[10px] text-slate-500 uppercase font-bold mb-1">CHARGE STATUS</div>
-                            <div class="flex items-center gap-2 text-emerald-400 font-mono text-xl">
-                                <i class="fas fa-bolt"></i>
-                                <span id="click-count">0</span> / 10
-                            </div>
-                        </div>
-                    </header>
-
-                    <main id="gacha-display" class="bg-slate-900 aspect-video rounded-3xl border border-slate-800 relative overflow-hidden flex flex-col items-center justify-center p-8 shadow-2xl">
-                        <!-- Decoration -->
-                        <div class="absolute inset-0 opacity-10 pointer-events-none">
-                            <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-emerald-500 rounded-full blur-[120px]"></div>
-                        </div>
-
-                        <!-- Default State -->
-                        <div id="state-idle" class="text-center space-y-8 w-full max-w-sm">
-                            <div id="room-status" class="mb-4"></div>
-                            <div class="w-full bg-slate-800 rounded-full h-4 overflow-hidden border border-slate-700 shadow-inner">
-                                <div id="progress-bar" class="bg-gradient-to-r from-emerald-500 to-cyan-400 h-full w-0 transition-all duration-200"></div>
-                            </div>
-                            <button id="draw-btn" onclick="handleButtonClick()" class="w-full group relative px-12 py-5 rounded-2xl text-xl font-bold bg-gradient-to-br from-emerald-600 to-cyan-600 transition-all transform active:scale-95 shadow-lg hover:shadow-emerald-500/25">
-                                <span id="btn-text" class="flex items-center justify-center gap-3 text-white">
-                                    パワーを貯める <i class="fas fa-hand-pointer animate-bounce"></i>
-                                </span>
-                            </button>
-                        </div>
-
-                        <!-- Spinning State (Hidden) -->
-                        <div id="state-spinning" class="hidden text-center space-y-4">
-                            <div class="relative">
-                                <i class="fas fa-dice-d20 text-6xl text-emerald-500 gacha-spin"></i>
-                            </div>
-                            <p class="text-xl font-bold animate-pulse">抽選しています...</p>
-                        </div>
-
-                        <!-- Result State (Hidden) -->
-                        <div id="state-result" class="hidden text-center animate-in zoom-in duration-300">
-                            <div id="result-rarity" class="text-sm font-black mb-2 px-4 py-1 rounded-full inline-block">当たり</div>
-                            <h2 id="result-name" class="text-4xl md:text-6xl font-black mb-8 text-white">ITEM NAME</h2>
-                            <div id="result-msg" class="text-emerald-400 mb-6 hidden font-bold">🎉 おめでとうございます！ 🎉</div>
-                            <button onclick="resetGacha()" class="px-8 py-3 bg-slate-800 hover:bg-slate-700 rounded-full text-sm font-bold transition-colors">
-                                戻る
-                            </button>
-                        </div>
-                    </main>
-
-                    <div class="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl">
-                        <h3 class="text-xs font-bold text-slate-500 mb-3 uppercase tracking-widest">排出内容</h3>
-                        <div class="flex justify-between items-center p-2 border-b border-slate-800/50">
-                            <div class="flex items-center gap-2">
-                                <span class="text-emerald-400 font-bold">1,000 Robux</span>
-                                <span id="stock-badge" class="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30">在庫あり</span>
-                            </div>
-                            <span class="font-mono">1.0%</span>
-                        </div>
-                        <div class="flex justify-between items-center p-2">
-                            <span class="text-slate-500">ハズレ</span>
-                            <span class="font-mono text-slate-500">99.0%</span>
-                        </div>
-                    </div>
+            <!-- Mobile History Toggle -->
+            <div class="bg-slate-900 rounded-3xl border border-slate-800 overflow-hidden flex flex-col max-h-[250px]">
+                <div class="p-3 px-4 border-b border-slate-800 flex justify-between items-center bg-slate-800/30">
+                    <span class="text-[10px] font-bold uppercase tracking-widest text-slate-400">Recent Logs</span>
+                    <span id="current-user-display" class="text-[10px] text-emerald-400 font-bold italic"></span>
                 </div>
-
-                <!-- Sidebar: Logs -->
-                <div class="space-y-4">
-                    <div class="bg-slate-900 rounded-3xl border border-slate-800 flex flex-col h-[600px] shadow-xl overflow-hidden">
-                        <div class="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-900/50 sticky top-0">
-                            <div class="flex items-center gap-2 font-bold text-sm">
-                                <i class="fas fa-users text-emerald-400"></i>
-                                <span>ルーム内履歴</span>
-                            </div>
-                        </div>
-                        
-                        <div id="log-container" class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar text-xs">
-                            <!-- Logs will appear here from localStorage -->
-                        </div>
-                    </div>
+                <div id="log-container" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar text-[10px]">
+                    <!-- Logs -->
                 </div>
+            </div>
+        </main>
+
+        <!-- Bottom Tap Area (Crucial for Mobile) -->
+        <div class="fixed bottom-0 left-0 right-0 p-4 pb-8 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent z-40">
+            <div class="max-w-md mx-auto">
+                <button id="draw-btn" onclick="handleButtonClick()" class="w-full group relative py-6 rounded-3xl text-xl font-black bg-emerald-600 shadow-xl active:scale-95 transition-all text-white flex items-center justify-center gap-3 overflow-hidden">
+                    <span id="btn-text">タップして貯める</span>
+                    <i class="fas fa-hand-pointer text-emerald-300 animate-bounce"></i>
+                </button>
             </div>
         </div>
     </div>
 
     <!-- Toast -->
-    <div id="toast-container" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 pointer-events-none"></div>
+    <div id="toast-container" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none w-full max-w-xs px-4 text-center"></div>
 
     <script>
         let clicks = 0;
@@ -171,12 +150,12 @@
         let currentRoom = "";
         let username = "";
         
+        // 確率を 0.2 (20% = 1/5) に設定
         const ITEMS = [
-            { name: '1,000 Robux', rarity: 'WINNER', rate: 0.01, color: 'text-emerald-400', bg: 'bg-emerald-400', isWin: true },
-            { name: 'ハズレ', rarity: 'LOSE', rate: 0.99, color: 'text-slate-500', bg: 'bg-slate-800', isWin: false },
+            { name: '1,000 Robux', rarity: 'WINNER', rate: 0.20, color: 'text-emerald-400', bg: 'bg-emerald-400', isWin: true },
+            { name: 'ハズレ', rarity: 'LOSE', rate: 0.80, color: 'text-slate-500', bg: 'bg-slate-800', isWin: false },
         ];
 
-        // --- Entry Management ---
         function entryGame() {
             const input = document.getElementById('username-input');
             const name = input.value.trim();
@@ -186,13 +165,12 @@
                 return;
             }
             username = name;
-            document.getElementById('current-user-display').innerText = username;
+            document.getElementById('current-user-display').innerText = `@${username}`;
             document.getElementById('entry-overlay').style.display = 'none';
             document.getElementById('main-content').classList.replace('opacity-0', 'opacity-100');
             initRoom();
         }
 
-        // --- Room Management ---
         function initRoom() {
             let hash = window.location.hash;
             if (!hash || hash.length < 5) {
@@ -204,7 +182,6 @@
             updateRoomStatus();
             loadLogs();
             
-            // Listen to other tabs for log sharing simulation
             window.addEventListener('storage', (e) => {
                 if (e.key === 'logs_' + currentRoom || e.key === 'winner_' + currentRoom) {
                     loadLogs();
@@ -224,44 +201,31 @@
             document.body.appendChild(tempInput);
             tempInput.value = url;
             tempInput.select();
-            document.execCommand("copy");
+            document.execCommand('copy');
             document.body.removeChild(tempInput);
-            showToast("ルームリンクをコピーしました！");
+            showToast("リンクをコピーしました");
         }
 
         function updateRoomStatus() {
             const winnerData = JSON.parse(localStorage.getItem('winner_' + currentRoom));
             const statusEl = document.getElementById('room-status');
-            const stockBadge = document.getElementById('stock-badge');
             
             if (winnerData) {
                 statusEl.innerHTML = `
-                    <div class="bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-xl inline-block w-full text-center">
-                        <i class="fas fa-crown mr-2"></i>
-                        ${winnerData.name}が当選しました！
+                    <div class="bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-2xl text-[10px] font-bold">
+                        👑 ${winnerData.name} が当選しました！
                     </div>
                 `;
-                stockBadge.innerText = "在庫なし";
-                stockBadge.className = "text-[10px] bg-red-500/20 text-red-400 px-2 py-0.5 rounded border border-red-500/30";
             } else {
                 statusEl.innerHTML = `
-                    <div class="flex justify-center gap-4 opacity-80 w-full">
-                        <div class="text-center p-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 flex-1">
-                            <div class="text-[10px] font-bold text-emerald-400 mb-1">当たり</div>
-                            <div class="text-lg font-black text-white">1%</div>
-                        </div>
-                        <div class="text-center p-3 rounded-2xl border border-slate-700 bg-slate-800/50 flex-1">
-                            <div class="text-[10px] font-bold text-slate-500 mb-1">ハズレ</div>
-                            <div class="text-lg font-black text-slate-400">99%</div>
-                        </div>
+                    <div class="flex justify-center gap-2">
+                        <span class="text-[9px] bg-slate-800 text-slate-400 px-2 py-1 rounded-full border border-slate-700">在庫あり</span>
+                        <span class="text-[9px] bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded-full border border-emerald-500/20 font-bold">当選確率 1/5</span>
                     </div>
                 `;
-                stockBadge.innerText = "在庫あり";
-                stockBadge.className = "text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded border border-emerald-500/30";
             }
         }
 
-        // --- Interaction Logic ---
         function handleButtonClick() {
             if (!document.getElementById('state-result').classList.contains('hidden')) return;
             if (!document.getElementById('state-spinning').classList.contains('hidden')) return;
@@ -286,21 +250,20 @@
             
             const btnText = document.getElementById('btn-text');
             if (clicks === 0) {
-                btnText.innerHTML = `パワーを貯める <i class="fas fa-hand-pointer animate-bounce"></i>`;
+                btnText.innerText = `タップして貯める`;
             } else {
-                btnText.innerHTML = `チャージ中... (${Math.round(progress)}%)`;
+                btnText.innerText = `チャージ中... ${Math.round(progress)}%`;
             }
         }
 
-        // --- Gacha Logic ---
         function startGacha() {
             showState('spinning');
-
             setTimeout(() => {
                 const isWon = localStorage.getItem('winner_' + currentRoom);
                 const rand = Math.random();
                 let selected = ITEMS[1];
 
+                // 20%の確率判定
                 if (!isWon && rand <= ITEMS[0].rate) {
                     selected = ITEMS[0];
                     localStorage.setItem('winner_' + currentRoom, JSON.stringify({ name: username, time: Date.now() }));
@@ -308,25 +271,20 @@
 
                 const rarityEl = document.getElementById('result-rarity');
                 const nameEl = document.getElementById('result-name');
-                const msgEl = document.getElementById('result-msg');
-
-                rarityEl.innerText = selected.isWin ? '🏆 WINNER' : '残念...';
-                rarityEl.className = `text-sm font-black mb-2 px-4 py-1 rounded-full inline-block ${selected.bg} ${selected.isWin ? 'text-black winner-anim' : 'text-slate-400'}`;
+                
+                rarityEl.innerText = selected.isWin ? '🏆 WINNER' : 'MISS';
+                rarityEl.className = `text-[10px] font-black mb-3 px-3 py-1 rounded-full inline-block ${selected.bg} ${selected.isWin ? 'text-black winner-anim' : 'text-slate-500'}`;
                 
                 nameEl.innerText = selected.name;
-                nameEl.className = `text-4xl md:text-6xl font-black mb-8 ${selected.isWin ? 'text-emerald-400' : 'text-slate-600'}`;
-
-                if(selected.isWin) msgEl.classList.remove('hidden');
-                else msgEl.classList.add('hidden');
+                nameEl.className = `text-4xl font-black mb-6 ${selected.isWin ? 'text-emerald-400' : 'text-slate-600'}`;
 
                 saveLog(selected);
                 showState('result');
                 updateRoomStatus();
                 loadLogs();
-            }, 1200);
+            }, 1000);
         }
 
-        // --- Shared Logs Logic ---
         function saveLog(item) {
             const key = 'logs_' + currentRoom;
             const logs = JSON.parse(localStorage.getItem(key) || '[]');
@@ -336,11 +294,9 @@
                 rarity: item.rarity,
                 isWin: item.isWin,
                 color: item.color,
-                bg: item.bg,
-                time: new Date().toLocaleTimeString()
+                time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
             });
-            // Keep only latest 50
-            if (logs.length > 50) logs.pop();
+            if (logs.length > 30) logs.pop();
             localStorage.setItem(key, JSON.stringify(logs));
         }
 
@@ -350,27 +306,21 @@
             const container = document.getElementById('log-container');
             
             if (logs.length === 0) {
-                container.innerHTML = `<div class="h-full flex flex-col items-center justify-center text-slate-600 text-center opacity-50 px-4">履歴はありません</div>`;
+                container.innerHTML = `<div class="p-8 text-center text-slate-600">履歴なし</div>`;
                 return;
             }
 
             container.innerHTML = logs.map(log => `
-                <div class="p-3 rounded-xl border ${log.isWin ? 'border-emerald-500/50 bg-emerald-500/5 ring-1 ring-emerald-500/20' : 'border-slate-800 bg-slate-950/50'} animate-in slide-in-from-right duration-300">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="opacity-40 text-[9px]">${log.time}</span>
-                        <span class="font-black ${log.color} text-[10px] uppercase">${log.rarity}</span>
-                    </div>
-                    <div class="flex items-center gap-1 flex-wrap">
-                        <span class="text-slate-500 font-bold underline decoration-slate-700">${log.user}</span>
-                        <span class="text-slate-400">が</span>
-                        <span class="${log.isWin ? 'text-emerald-400 font-black' : 'text-slate-300'}">${log.itemName}</span>
-                        <span class="text-slate-400">${log.isWin ? 'を獲得！' : 'を引きました'}</span>
+                <div class="flex items-center justify-between p-2 rounded-xl bg-slate-950/50 border border-slate-800/50">
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-600 font-mono">${log.time}</span>
+                        <span class="font-bold text-slate-300">${log.user}</span>
+                        <span class="${log.isWin ? 'text-emerald-400 font-black' : 'text-slate-500'}">${log.isWin ? 'WIN!' : 'ハズレ'}</span>
                     </div>
                 </div>
             `).join('');
         }
 
-        // --- Helpers ---
         function showState(stateName) {
             document.getElementById('state-idle').classList.add('hidden');
             document.getElementById('state-spinning').classList.add('hidden');
@@ -386,8 +336,8 @@
         function showToast(msg) {
             const container = document.getElementById('toast-container');
             const toast = document.createElement('div');
-            toast.className = "bg-emerald-500 text-black px-6 py-3 rounded-2xl font-bold shadow-2xl copy-toast flex items-center gap-2";
-            toast.innerHTML = `<i class="fas fa-check-circle"></i> ${msg}`;
+            toast.className = "bg-emerald-500 text-black px-4 py-2 rounded-full font-bold shadow-xl slide-up inline-block text-[10px]";
+            toast.innerText = msg;
             container.appendChild(toast);
             setTimeout(() => toast.remove(), 2000);
         }
