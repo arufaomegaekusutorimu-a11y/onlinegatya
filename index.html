@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Robux Gacha - P2P Individual Mode</title>
+    <title>Robux Gacha - High Speed Sync</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -23,7 +23,6 @@
         .copy-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #393B3D; color: white; padding: 8px 24px; border-radius: 30px; font-size: 14px; z-index: 300; display: none; }
         .main-container { height: 100vh; display: flex; flex-direction: column; max-width: 450px; margin: 0 auto; width: 100%; }
         .host-badge { background: #FFD700; color: #8B4513; padding: 2px 6px; border-radius: 4px; font-size: 8px; font-weight: 900; margin-left: 4px; }
-        #connection-status { font-size: 10px; font-weight: bold; }
     </style>
 </head>
 <body class="flex items-center justify-center">
@@ -52,17 +51,17 @@
     <div id="entry-overlay" class="fixed inset-0 z-[100] bg-white flex items-center justify-center p-4">
         <div class="max-w-md w-full bg-white border-2 border-slate-100 p-8 rounded-[2.5rem] shadow-2xl text-center space-y-8">
             <div class="w-20 h-20 bg-blue-50 text-[#00A2FF] rounded-3xl flex items-center justify-center mx-auto text-4xl rotate-3 roblox-shadow">
-                <i class="fas fa-gamepad"></i>
+                <i class="fas fa-bolt"></i>
             </div>
             <div class="space-y-2">
                 <h2 class="text-2xl font-black text-slate-800">プレイヤー登録</h2>
-                <p class="text-sm text-slate-400 font-bold">個人チャージ / 同期リザルト</p>
+                <p class="text-sm text-slate-400 font-bold">全員同時参加可能モード</p>
             </div>
             <input type="text" id="username-input" placeholder="名前を入力..." maxlength="12" class="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-5 text-center text-xl font-bold focus:outline-none focus:border-blue-400">
             <button id="entry-btn" onclick="joinGame()" class="w-full btn-blue text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95">
                 ゲーム開始
             </button>
-            <p id="connection-status" class="text-slate-400">通信準備中...</p>
+            <p id="connection-status" class="text-[10px] font-bold text-slate-400">通信準備中...</p>
         </div>
     </div>
 
@@ -77,7 +76,7 @@
                             <span id="room-id-display" class="font-black text-xs text-blue-500 tracking-tight leading-none">ID: ---</span>
                             <span id="host-badge" class="host-badge hidden">HOST</span>
                         </div>
-                        <span id="peer-count" class="text-[8px] font-bold text-slate-400 uppercase">接続数: 0</span>
+                        <span id="peer-count-display" class="text-[8px] font-bold text-slate-400 uppercase">接続数: 0</span>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
@@ -110,7 +109,7 @@
                     <div class="w-20 h-20 bg-blue-50 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border-2 border-blue-100">
                         <i class="fas fa-cube text-4xl text-blue-400 gacha-spin"></i>
                     </div>
-                    <p id="spinner-text" class="text-lg font-black animate-pulse text-blue-500">抽選中...</p>
+                    <p class="text-lg font-black animate-pulse text-blue-500">抽選中...</p>
                 </div>
                 <div id="state-result" class="hidden text-center fade-in space-y-2">
                     <div class="text-[10px] font-black px-4 py-1.5 rounded-full inline-block bg-slate-100 text-slate-400 uppercase">Miss</div>
@@ -120,7 +119,7 @@
 
             <div class="bg-white h-[220px] rounded-[2rem] roblox-shadow overflow-hidden flex flex-col">
                 <div class="p-3 px-5 border-b border-slate-50 flex justify-between items-center bg-white/50">
-                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">全員の履歴</span>
+                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">ライブ履歴 (全員同期)</span>
                     <span id="current-user-display" class="text-[10px] text-blue-500 font-black"></span>
                 </div>
                 <div id="log-container" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar"></div>
@@ -140,11 +139,11 @@
         let connections = [];
         let isHost = false;
         let username = "";
-        let clicks = 0; // 個別チャージ
+        let clicks = 0;
         const CLICKS_NEEDED = 10;
         let logs = [];
         let winner = null;
-        let isSpinningGlobal = false;
+        let pendingClaims = []; // ホストがミリ秒単位の判定に使用
 
         const urlParams = new URLSearchParams(window.location.search);
         const hostId = urlParams.get('room');
@@ -159,7 +158,7 @@
                     isHost = true;
                     document.getElementById('host-badge').classList.remove('hidden');
                     document.getElementById('reset-btn').classList.remove('hidden');
-                    document.getElementById('room-id-display').innerText = `HOST ID: ${id}`;
+                    document.getElementById('room-id-display').innerText = `ID: ${id.substring(0,8)}`;
                     document.getElementById('status-dot').className = "bg-green-500 w-2.5 h-2.5 rounded-full";
                     document.getElementById('connection-status').innerText = "準備完了";
                 }
@@ -168,8 +167,10 @@
             peer.on('connection', (conn) => {
                 connections.push(conn);
                 setupConn(conn);
-                updatePeerCount();
-                conn.send({ type: 'init', logs, winner, isSpinningGlobal });
+                updatePeerCountDisplay();
+                conn.send({ type: 'init', logs, winner, peerCount: connections.length });
+                // 接続数更新を全員に通知
+                broadcast({ type: 'update_peers', count: connections.length });
             });
         }
 
@@ -177,60 +178,94 @@
             const conn = peer.connect(id);
             connections.push(conn);
             setupConn(conn);
-            document.getElementById('room-id-display').innerText = `GUEST (ROOM: ${id.substring(0,5)})`;
+            document.getElementById('room-id-display').innerText = `ROOM: ${id.substring(0,5)}`;
         }
 
         function setupConn(conn) {
             conn.on('open', () => {
                 document.getElementById('status-dot').className = "bg-green-500 w-2.5 h-2.5 rounded-full";
                 document.getElementById('connection-status').innerText = "接続成功！";
-                updatePeerCount();
+                updatePeerCountDisplay();
             });
             conn.on('data', (data) => {
                 if (data.type === 'init') {
                     logs = data.logs;
                     winner = data.winner;
-                    isSpinningGlobal = data.isSpinningGlobal;
+                    updatePeerCountDisplay(data.peerCount);
                     renderLogs();
                     if (winner) showWinner(winner);
-                    if (isSpinningGlobal) showState('spinning', "誰かが抽選中...");
                 }
-                if (data.type === 'gacha_start') {
-                    isSpinningGlobal = true;
-                    showState('spinning', `${data.user}が抽選中...`);
+                if (data.type === 'update_peers') {
+                    updatePeerCountDisplay(data.count);
                 }
-                if (data.type === 'gacha_result') {
-                    isSpinningGlobal = false;
+                if (data.type === 'gacha_claim') {
+                    // ホスト側のロジック: 当選者の先着判定
+                    if (isHost && !winner) {
+                        handleHostFairJudgement(data);
+                    }
+                }
+                if (data.type === 'miss_notice') {
+                    // 誰かがハズレたとき全員の履歴を更新
                     logs = data.logs;
                     renderLogs();
-                    if (data.isWin) {
-                        winner = data.winner;
-                        showWinner(winner);
-                    } else {
-                        showState('result');
-                        setTimeout(resetGachaUI, 1200);
-                    }
+                }
+                if (data.type === 'broadcast_win') {
+                    // ホストが決定した最終勝者を全員に通知
+                    winner = data.winner;
+                    logs = data.logs;
+                    renderLogs();
+                    showWinner(winner);
                 }
                 if (data.type === 'reset') {
                     winner = null;
-                    isSpinningGlobal = false;
                     clicks = 0;
+                    logs = [];
                     document.getElementById('winner-screen').classList.add('hidden');
                     resetGachaUI();
+                    renderLogs();
                 }
             });
             conn.on('close', () => {
                 connections = connections.filter(c => c !== conn);
-                updatePeerCount();
+                updatePeerCountDisplay();
+                if (isHost) broadcast({ type: 'update_peers', count: connections.length });
             });
         }
 
-        function updatePeerCount() {
-            document.getElementById('peer-count').innerText = `接続数: ${connections.length}`;
+        // ホストによるミリ秒単位の判定
+        function handleHostFairJudgement(claim) {
+            if (winner) return; // 既に決まっている場合は無視
+
+            pendingClaims.push(claim);
+            
+            // 0.1秒待って最も早かった人を確定（ネットワーク遅延のゆらぎを吸収）
+            setTimeout(() => {
+                if (winner || pendingClaims.length === 0) return;
+
+                // タイムスタンプ順にソート
+                pendingClaims.sort((a, b) => a.timestamp - b.timestamp);
+                const trueWinner = pendingClaims[0];
+                
+                winner = trueWinner.user;
+                const timeStr = new Date(trueWinner.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                logs.unshift({ user: winner, isWin: true, timeStr });
+                
+                broadcast({ type: 'broadcast_win', winner, logs });
+                showWinner(winner);
+                renderLogs();
+                pendingClaims = [];
+            }, 100);
+        }
+
+        function updatePeerCountDisplay(count) {
+            const displayCount = count !== undefined ? count : connections.length;
+            document.getElementById('peer-count-display').innerText = `接続数: ${displayCount}`;
         }
 
         function broadcast(data) {
-            connections.forEach(conn => conn.send(data));
+            connections.forEach(conn => {
+                if (conn.open) conn.send(data);
+            });
         }
 
         function joinGame() {
@@ -243,7 +278,7 @@
         }
 
         function handleDraw() {
-            if (winner || isSpinningGlobal) return;
+            if (winner) return;
             if (!document.getElementById('state-spinning').classList.contains('hidden')) return;
             if (!document.getElementById('state-result').classList.contains('hidden')) return;
 
@@ -258,29 +293,31 @@
         }
 
         function startGacha() {
-            isSpinningGlobal = true;
-            showState('spinning', "抽選中...");
-            broadcast({ type: 'gacha_start', user: username });
-
+            showState('spinning');
+            
             setTimeout(() => {
-                // 当選確率 1/2
+                const timestamp = Date.now();
                 const isWin = Math.random() < 0.5;
-                const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                const logEntry = { user: username, isWin, timeStr };
-                logs.unshift(logEntry);
+                const timeStr = new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
-                isSpinningGlobal = false;
                 if (isWin) {
-                    winner = username;
-                    broadcast({ type: 'gacha_result', isWin: true, winner: username, logs });
-                    showWinner(username);
+                    // 当選申請をホストに送信
+                    const claim = { type: 'gacha_claim', user: username, timestamp };
+                    if (isHost) {
+                        handleHostFairJudgement(claim);
+                    } else {
+                        broadcast(claim);
+                    }
                 } else {
-                    broadcast({ type: 'gacha_result', isWin: false, logs });
+                    // ハズレは即座に自分と全員に通知
+                    const logEntry = { user: username, isWin: false, timeStr };
+                    logs.unshift(logEntry);
+                    renderLogs();
                     showState('result');
                     setTimeout(resetGachaUI, 1200);
+                    broadcast({ type: 'miss_notice', logs });
                 }
-                renderLogs();
-            }, 1000);
+            }, 800);
         }
 
         function updateUI() {
@@ -290,28 +327,24 @@
             document.getElementById('btn-text').innerText = clicks === 0 ? `タップしてチャージ` : `チャージ中... ${Math.round(progress)}%`;
         }
 
-        function showState(state, text = "抽選中...") {
+        function showState(state) {
             document.getElementById('state-idle').classList.add('hidden');
             document.getElementById('state-spinning').classList.add('hidden');
             document.getElementById('state-result').classList.add('hidden');
-            
-            const stateEl = document.getElementById('state-' + state);
-            stateEl.classList.remove('hidden');
-            
-            if (state === 'spinning') {
-                document.getElementById('spinner-text').innerText = text;
-            }
+            document.getElementById('state-' + state).classList.remove('hidden');
         }
 
         function resetGachaUI() {
-            showState('idle');
-            updateUI();
+            if (!winner) {
+                showState('idle');
+                updateUI();
+            }
         }
 
         function renderLogs() {
             const container = document.getElementById('log-container');
             container.innerHTML = logs.slice(0, 20).map(log => `
-                <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
+                <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 fade-in">
                     <div class="flex items-center gap-2">
                         <span class="text-[8px] text-slate-400 font-black">${log.timeStr}</span>
                         <span class="font-black text-slate-700 text-[11px]">@${log.user}</span>
@@ -324,7 +357,7 @@
         }
 
         function showWinner(name) {
-            document.getElementById('winner-name-display').innerText = `@${name} が当選しました！`;
+            document.getElementById('winner-name-display').innerText = `@${name} が最速で当選しました！`;
             document.getElementById('winner-screen').classList.remove('hidden');
             if (name === username) {
                 document.getElementById('winner-title').innerText = "YOU WIN!";
@@ -337,14 +370,12 @@
         function requestReset() {
             if (!isHost) return;
             winner = null;
-            isSpinningGlobal = false;
             clicks = 0;
             logs = [];
-            renderLogs();
-            updateUI();
+            broadcast({ type: 'reset' });
             document.getElementById('winner-screen').classList.add('hidden');
             resetGachaUI();
-            broadcast({ type: 'reset' });
+            renderLogs();
         }
 
         function createConfetti() {
