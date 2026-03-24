@@ -3,99 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Robux Gacha - Offline Mode</title>
+    <title>Robux Gacha - P2P Sync Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        
-        :root {
-            --roblox-blue: #00A2FF;
-            --roblox-bg: #F2F4F5;
-            --roblox-text: #393B3D;
-        }
-
-        body { 
-            font-family: 'Inter', sans-serif; 
-            touch-action: manipulation;
-            -webkit-tap-highlight-color: transparent;
-            overflow: hidden; 
-            background-color: var(--roblox-bg);
-            color: var(--roblox-text);
-            height: 100vh;
-        }
-
+        :root { --roblox-blue: #00A2FF; --roblox-bg: #F2F4F5; --roblox-text: #393B3D; }
+        body { font-family: 'Inter', sans-serif; touch-action: manipulation; background-color: var(--roblox-bg); color: var(--roblox-text); height: 100vh; overflow: hidden; }
         .gacha-spin { animation: spin 0.5s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #CCD1D7; border-radius: 10px; }
-
-        .winner-glow {
-            animation: glow 2s ease-in-out infinite alternate;
-        }
-        @keyframes glow {
-            from { box-shadow: 0 0 20px -5px var(--roblox-blue); }
-            to { box-shadow: 0 0 40px 10px var(--roblox-blue); }
-        }
-
-        .confetti {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            animation: fall 3s linear infinite;
-            z-index: 210;
-        }
-        @keyframes fall {
-            to { transform: translateY(100vh) rotate(360deg); }
-        }
-
-        .click-pulse { animation: pulse-sm 0.1s ease-out; }
-        @keyframes pulse-sm { 0% { transform: scale(1); } 50% { transform: scale(0.95); } 100% { transform: scale(1); } }
-
-        .fade-in { animation: fadeIn 0.4s ease-out forwards; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .roblox-shadow {
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-
+        .winner-glow { animation: glow 2s ease-in-out infinite alternate; }
+        @keyframes glow { from { box-shadow: 0 0 20px -5px var(--roblox-blue); } to { box-shadow: 0 0 40px 10px var(--roblox-blue); } }
+        .confetti { position: absolute; width: 10px; height: 10px; animation: fall 3s linear infinite; z-index: 210; }
+        @keyframes fall { to { transform: translateY(100vh) rotate(360deg); } }
+        .roblox-shadow { box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .btn-blue { background-color: var(--roblox-blue); }
         .btn-blue:active { filter: brightness(0.9); }
-
-        .copy-toast {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #393B3D;
-            color: white;
-            padding: 8px 24px;
-            border-radius: 30px;
-            font-size: 14px;
-            font-weight: bold;
-            z-index: 300;
-            display: none;
-        }
-
-        .main-container {
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            max-width: 450px;
-            margin: 0 auto;
-            width: 100%;
-        }
-
-        .host-badge {
-            background: #FFD700;
-            color: #8B4513;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 8px;
-            font-weight: 900;
-            margin-left: 4px;
-        }
+        .copy-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #393B3D; color: white; padding: 8px 24px; border-radius: 30px; font-size: 14px; z-index: 300; display: none; }
+        .main-container { height: 100vh; display: flex; flex-direction: column; max-width: 450px; margin: 0 auto; width: 100%; }
+        .host-badge { background: #FFD700; color: #8B4513; padding: 2px 6px; border-radius: 4px; font-size: 8px; font-weight: 900; margin-left: 4px; }
+        #connection-status { font-size: 10px; font-weight: bold; }
     </style>
 </head>
 <body class="flex items-center justify-center">
@@ -105,19 +33,16 @@
     <!-- Winner Screen -->
     <div id="winner-screen" class="fixed inset-0 z-[200] hidden flex flex-col items-center justify-center p-6 text-center bg-white overflow-y-auto">
         <div class="absolute inset-0 overflow-hidden pointer-events-none" id="confetti-container"></div>
-        <div class="relative z-10 space-y-6 fade-in max-w-sm w-full">
+        <div class="relative z-10 space-y-6 max-w-sm w-full">
             <div class="text-7xl">🎉</div>
-            <h1 class="text-4xl font-black text-[#00A2FF] tracking-tighter winner-glow px-6 py-3 rounded-3xl bg-blue-50 border-4 border-blue-400">WINNER!</h1>
+            <h1 id="winner-title" class="text-4xl font-black text-[#00A2FF] winner-glow px-6 py-3 rounded-3xl bg-blue-50 border-4 border-blue-400">WINNER!</h1>
             <div class="space-y-4">
-                <p class="text-2xl font-black text-slate-800">ROBUX当選おめでとう！</p>
+                <p id="winner-name-display" class="text-2xl font-black text-slate-800">当選おめでとう！</p>
                 <div class="p-5 bg-slate-50 rounded-[2rem] border-2 border-dashed border-slate-200 roblox-shadow">
                     <p class="text-slate-700 font-black text-base">スクリーンショットを保存して<br>報告してください</p>
                 </div>
-                <button onclick="resetGame()" class="w-full bg-red-500 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95">
-                    <i class="fas fa-sync-alt mr-2"></i>もう一度遊ぶ
-                </button>
-                <button onclick="createNewRoom()" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 mt-2">
-                    <i class="fas fa-plus mr-2"></i>新しい部屋を作成
+                <button id="reset-btn" onclick="requestReset()" class="hidden w-full bg-red-500 text-white py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95">
+                    <i class="fas fa-sync-alt mr-2"></i>部屋をリセット (ホストのみ)
                 </button>
             </div>
         </div>
@@ -131,12 +56,13 @@
             </div>
             <div class="space-y-2">
                 <h2 class="text-2xl font-black text-slate-800">プレイヤー登録</h2>
-                <p class="text-sm text-slate-400 font-bold">名前を入力してスタート</p>
+                <p class="text-sm text-slate-400 font-bold">P2Pリアルタイム同期モード</p>
             </div>
             <input type="text" id="username-input" placeholder="名前を入力..." maxlength="12" class="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-5 text-center text-xl font-bold focus:outline-none focus:border-blue-400">
             <button id="entry-btn" onclick="joinGame()" class="w-full btn-blue text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95">
                 ゲーム開始
             </button>
+            <p id="connection-status" class="text-slate-400">通信準備中...</p>
         </div>
     </div>
 
@@ -144,19 +70,18 @@
     <div id="main-content" class="main-container opacity-0 transition-opacity duration-500 pointer-events-none">
         <header class="p-3 bg-white roblox-shadow z-40">
             <div class="flex justify-between items-center px-2">
-                <div id="room-header" onclick="createNewRoom()" class="flex items-center gap-2 cursor-pointer active:opacity-50 transition-opacity">
-                    <div class="bg-blue-400 w-2.5 h-2.5 rounded-full animate-pulse"></div>
+                <div class="flex items-center gap-2">
+                    <div id="status-dot" class="bg-gray-400 w-2.5 h-2.5 rounded-full"></div>
                     <div class="flex flex-col">
                         <div class="flex items-center">
-                            <span id="room-id-display" class="font-black text-xs text-blue-500 tracking-tight leading-none">ROOM: #---</span>
-                            <span class="host-badge">HOST</span>
+                            <span id="room-id-display" class="font-black text-xs text-blue-500 tracking-tight leading-none">ID: ---</span>
+                            <span id="host-badge" class="host-badge hidden">HOST</span>
                         </div>
+                        <span id="peer-count" class="text-[8px] font-bold text-slate-400 uppercase">接続数: 0</span>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
-                    <button onclick="copyInviteLink()" class="bg-blue-50 text-blue-500 px-3 py-1 rounded-full text-[10px] font-black border border-blue-100">
-                        招待
-                    </button>
+                    <button onclick="copyInviteLink()" class="bg-blue-50 text-blue-500 px-3 py-1 rounded-full text-[10px] font-black border border-blue-100">招待</button>
                     <div class="text-right">
                         <div class="text-[9px] text-slate-400 font-black">POWER</div>
                         <div class="text-sm font-black text-blue-500">
@@ -172,10 +97,8 @@
                 <div id="state-idle" class="w-full text-center space-y-6">
                     <div class="relative">
                         <div class="text-6xl mb-3 drop-shadow-lg">💎</div>
-                        <h2 class="text-2xl font-black text-slate-800">ROBUX 1/2 GACHA</h2>
-                        <div class="inline-block mt-2 bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full text-[10px] font-black border border-yellow-200">
-                            当選確率: 1/2 (50%)
-                        </div>
+                        <h2 class="text-2xl font-black text-slate-800">ROBUX GACHA</h2>
+                        <div class="inline-block mt-2 bg-red-100 text-red-600 px-3 py-1 rounded-full text-[10px] font-black border border-red-200">当選確率: 1/499</div>
                     </div>
                     <div class="px-6">
                         <div class="w-full bg-slate-100 rounded-full h-3 p-0.5 overflow-hidden shadow-inner">
@@ -183,33 +106,29 @@
                         </div>
                     </div>
                 </div>
-
                 <div id="state-spinning" class="hidden text-center space-y-4">
                     <div class="w-20 h-20 bg-blue-50 rounded-[1.5rem] flex items-center justify-center mx-auto shadow-inner border-2 border-blue-100">
                         <i class="fas fa-cube text-4xl text-blue-400 gacha-spin"></i>
                     </div>
                     <p class="text-lg font-black animate-pulse text-blue-500">抽選中...</p>
                 </div>
-
                 <div id="state-result" class="hidden text-center fade-in space-y-2">
-                    <div id="result-rarity" class="text-[10px] font-black px-4 py-1.5 rounded-full inline-block bg-slate-100 text-slate-400 uppercase">Miss</div>
+                    <div class="text-[10px] font-black px-4 py-1.5 rounded-full inline-block bg-slate-100 text-slate-400 uppercase">Miss</div>
                     <h2 class="text-4xl font-black text-slate-300">ハズレ</h2>
                 </div>
             </div>
 
             <div class="bg-white h-[220px] rounded-[2rem] roblox-shadow overflow-hidden flex flex-col">
                 <div class="p-3 px-5 border-b border-slate-50 flex justify-between items-center bg-white/50">
-                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">履歴 (ローカル)</span>
+                    <span class="text-[10px] font-black uppercase text-slate-400 tracking-wider">ライブ履歴 (同期)</span>
                     <span id="current-user-display" class="text-[10px] text-blue-500 font-black"></span>
                 </div>
-                <div id="log-container" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-                    <div class="p-4 text-center text-slate-300 text-xs font-bold">履歴はありません</div>
-                </div>
+                <div id="log-container" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar"></div>
             </div>
         </div>
 
         <div class="p-4 pt-0 pb-8">
-            <button id="draw-btn" onclick="handleButtonClick()" class="w-full py-6 rounded-[2rem] text-xl font-black btn-blue text-white shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
+            <button id="draw-btn" onclick="handleDraw()" class="w-full py-6 rounded-[2rem] text-xl font-black btn-blue text-white shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
                 <span id="btn-text">タップでチャージ</span>
                 <i class="fas fa-bolt-lightning text-blue-200 animate-bounce"></i>
             </button>
@@ -217,92 +136,153 @@
     </div>
 
     <script>
+        let peer;
+        let connections = [];
+        let isHost = false;
+        let username = "";
         let clicks = 0;
         const CLICKS_NEEDED = 10;
-        let username = "";
-        let currentRoomId = "";
         let logs = [];
+        let winner = null;
 
-        // ページ読み込み時の初期化
-        window.onload = () => {
-            setupRoom();
-        };
+        const urlParams = new URLSearchParams(window.location.search);
+        const hostId = urlParams.get('room');
 
-        function setupRoom() {
-            let hash = window.location.hash.replace('#', '');
-            if (!hash) {
-                hash = "ROOM-" + Math.random().toString(36).substring(2, 7).toUpperCase();
-                window.location.hash = hash;
-            }
-            currentRoomId = hash;
-            document.getElementById('room-id-display').innerText = `ROOM: ${currentRoomId}`;
+        // Initialize Peer
+        function initPeer() {
+            peer = new Peer();
+
+            peer.on('open', (id) => {
+                document.getElementById('connection-status').innerText = hostId ? "ホストに接続中..." : "接続待機中...";
+                if (hostId) {
+                    connectToHost(hostId);
+                } else {
+                    isHost = true;
+                    document.getElementById('host-badge').classList.remove('hidden');
+                    document.getElementById('reset-btn').classList.remove('hidden');
+                    document.getElementById('room-id-display').innerText = `HOST ID: ${id}`;
+                    document.getElementById('status-dot').className = "bg-green-500 w-2.5 h-2.5 rounded-full";
+                    document.getElementById('connection-status').innerText = "準備完了";
+                }
+            });
+
+            peer.on('connection', (conn) => {
+                connections.push(conn);
+                setupConn(conn);
+                updatePeerCount();
+                // Send current state to new player
+                conn.send({ type: 'init', clicks, logs, winner });
+            });
+        }
+
+        function connectToHost(id) {
+            const conn = peer.connect(id);
+            connections.push(conn);
+            setupConn(conn);
+            document.getElementById('room-id-display').innerText = `GUEST (ROOM: ${id.substring(0,5)})`;
+        }
+
+        function setupConn(conn) {
+            conn.on('open', () => {
+                document.getElementById('status-dot').className = "bg-green-500 w-2.5 h-2.5 rounded-full";
+                document.getElementById('connection-status').innerText = "接続成功！";
+                updatePeerCount();
+            });
+            conn.on('data', (data) => {
+                if (data.type === 'init') {
+                    clicks = data.clicks;
+                    logs = data.logs;
+                    winner = data.winner;
+                    updateUI();
+                    renderLogs();
+                    if (winner) showWinner(winner);
+                }
+                if (data.type === 'click') {
+                    clicks = data.clicks;
+                    updateUI();
+                }
+                if (data.type === 'gacha_start') {
+                    showState('spinning');
+                }
+                if (data.type === 'gacha_result') {
+                    logs = data.logs;
+                    renderLogs();
+                    if (data.isWin) {
+                        winner = data.winner;
+                        showWinner(winner);
+                    } else {
+                        showState('result');
+                        setTimeout(resetGachaUI, 1200);
+                    }
+                }
+                if (data.type === 'reset') {
+                    winner = null;
+                    clicks = 0;
+                    document.getElementById('winner-screen').classList.add('hidden');
+                    resetGachaUI();
+                    updateUI();
+                }
+            });
+            conn.on('close', () => {
+                connections = connections.filter(c => c !== conn);
+                updatePeerCount();
+            });
+        }
+
+        function updatePeerCount() {
+            document.getElementById('peer-count').innerText = `接続数: ${connections.length}`;
+        }
+
+        function broadcast(data) {
+            connections.forEach(conn => conn.send(data));
         }
 
         function joinGame() {
-            const input = document.getElementById('username-input');
-            const name = input.value.trim();
-            if (!name) return;
-            username = name;
-            
+            username = document.getElementById('username-input').value.trim();
+            if (!username) return;
             document.getElementById('current-user-display').innerText = `@${username}`;
             document.getElementById('entry-overlay').style.display = 'none';
             document.getElementById('main-content').classList.replace('opacity-0', 'opacity-100');
             document.getElementById('main-content').classList.remove('pointer-events-none');
         }
 
-        function handleButtonClick() {
-            if (!document.getElementById('state-result').classList.contains('hidden')) return;
+        function handleDraw() {
+            if (winner) return;
             if (!document.getElementById('state-spinning').classList.contains('hidden')) return;
+            if (!document.getElementById('state-result').classList.contains('hidden')) return;
 
             clicks++;
             updateUI();
-            
-            document.getElementById('draw-btn').classList.add('click-pulse');
-            setTimeout(() => document.getElementById('draw-btn').classList.remove('click-pulse'), 100);
+            broadcast({ type: 'click', clicks });
 
             if (clicks >= CLICKS_NEEDED) {
                 clicks = 0;
-                processGacha();
+                broadcast({ type: 'click', clicks });
+                startGacha();
             }
         }
 
-        function processGacha() {
+        function startGacha() {
             showState('spinning');
-            
+            broadcast({ type: 'gacha_start' });
+
             setTimeout(() => {
-                // 当選確率 1/2 (50%)
-                const isWin = Math.random() <= 0.5;
-                
+                const isWin = Math.random() < (1 / 499);
+                const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const logEntry = { user: username, isWin, timeStr };
+                logs.unshift(logEntry);
+
                 if (isWin) {
-                    addLog(true);
-                    showWinner();
+                    winner = username;
+                    broadcast({ type: 'gacha_result', isWin: true, winner: username, logs });
+                    showWinner(username);
                 } else {
-                    addLog(false);
+                    broadcast({ type: 'gacha_result', isWin: false, logs });
                     showState('result');
-                    setTimeout(() => resetGacha(), 1200);
+                    setTimeout(resetGachaUI, 1200);
                 }
+                renderLogs();
             }, 800);
-        }
-
-        function addLog(isWin) {
-            const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            logs.unshift({ user: username, isWin, timeStr });
-            renderLogs();
-        }
-
-        function renderLogs() {
-            const logContainer = document.getElementById('log-container');
-            logContainer.innerHTML = logs.slice(0, 20).map(log => `
-                <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100 fade-in">
-                    <div class="flex items-center gap-2">
-                        <span class="text-[8px] text-slate-400 font-black">${log.timeStr}</span>
-                        <span class="font-black text-slate-700 text-[11px]">@${log.user}</span>
-                    </div>
-                    <span class="${log.isWin ? 'text-blue-500 font-black' : 'text-slate-400 font-bold'} text-[10px]">
-                        ${log.isWin ? '💎 WINNER' : 'MISS'}
-                    </span>
-                </div>
-            `).join('');
         }
 
         function updateUI() {
@@ -319,23 +299,47 @@
             document.getElementById('state-' + state).classList.remove('hidden');
         }
 
-        function resetGacha() { updateUI(); showState('idle'); }
+        function resetGachaUI() {
+            showState('idle');
+            updateUI();
+        }
 
-        function showWinner() {
+        function renderLogs() {
+            const container = document.getElementById('log-container');
+            container.innerHTML = logs.slice(0, 20).map(log => `
+                <div class="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-100">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[8px] text-slate-400 font-black">${log.timeStr}</span>
+                        <span class="font-black text-slate-700 text-[11px]">@${log.user}</span>
+                    </div>
+                    <span class="${log.isWin ? 'text-blue-500 font-black' : 'text-slate-400 font-bold'} text-[10px]">
+                        ${log.isWin ? '💎 WINNER' : 'MISS'}
+                    </span>
+                </div>
+            `).join('');
+        }
+
+        function showWinner(name) {
+            document.getElementById('winner-name-display').innerText = `@${name} が当選しました！`;
             document.getElementById('winner-screen').classList.remove('hidden');
-            createConfetti();
+            if (name === username) {
+                document.getElementById('winner-title').innerText = "YOU WIN!";
+                createConfetti();
+            } else {
+                document.getElementById('winner-title').innerText = "CLOSED";
+            }
         }
 
-        function resetGame() {
+        function requestReset() {
+            if (!isHost) return;
+            winner = null;
+            clicks = 0;
+            logs = [];
+            renderLogs();
+            updateUI();
             document.getElementById('winner-screen').classList.add('hidden');
-            resetGacha();
-        }
-
-        function createNewRoom() {
-            if (!confirm('新しい部屋を作成しますか？')) return;
-            const newHash = "ROOM-" + Math.random().toString(36).substring(2, 7).toUpperCase();
-            window.location.hash = newHash;
-            location.reload();
+            resetGachaUI();
+            broadcast({ type: 'reset' });
         }
 
         function createConfetti() {
@@ -352,7 +356,7 @@
         }
 
         function copyInviteLink() {
-            const url = window.location.href;
+            const url = window.location.origin + window.location.pathname + "?room=" + peer.id;
             const temp = document.createElement('input');
             document.body.appendChild(temp);
             temp.value = url;
@@ -361,8 +365,10 @@
             document.body.removeChild(temp);
             const toast = document.getElementById('copy-toast');
             toast.style.display = 'block';
-            setTimeout(() => { toast.style.display = 'none'; }, 2000);
+            setTimeout(() => toast.style.display = 'none', 2000);
         }
+
+        initPeer();
     </script>
 </body>
 </html>
