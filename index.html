@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Robux Gacha - Realtime Full Sync</title>
+    <title>Robux Gacha - 1/999 Mode</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -57,7 +57,7 @@
             </div>
             <div class="space-y-2">
                 <h2 class="text-2xl font-black text-slate-800">プレイヤー登録</h2>
-                <p class="text-sm text-slate-400 font-bold">全員リアルタイム同期モード</p>
+                <p class="text-sm text-slate-400 font-bold">全員リアルタイム同期 1/999</p>
             </div>
             <input type="text" id="username-input" placeholder="名前を入力..." maxlength="12" class="w-full bg-slate-50 border-2 border-slate-100 rounded-2xl px-6 py-5 text-center text-xl font-bold focus:outline-none focus:border-blue-400">
             <button id="entry-btn" onclick="joinGame()" class="w-full btn-blue text-white py-5 rounded-2xl font-black text-xl shadow-lg active:scale-95">
@@ -78,7 +78,11 @@
                             <span id="room-id-display" class="font-black text-xs text-blue-500 tracking-tight leading-none">ID: ---</span>
                             <span id="host-badge" class="host-badge hidden">HOST</span>
                         </div>
-                        <span id="peer-count-display" class="text-[8px] font-bold text-slate-400 uppercase">接続数: 0</span>
+                        <div class="flex gap-2">
+                            <span id="peer-count-display" class="text-[8px] font-bold text-slate-400 uppercase">接続数: 0</span>
+                            <span class="text-[8px] font-bold text-slate-300">|</span>
+                            <span id="total-draws-display" class="text-[8px] font-bold text-red-400 uppercase">総抽選: 0回</span>
+                        </div>
                     </div>
                 </div>
                 <div class="flex items-center gap-2">
@@ -99,7 +103,7 @@
                     <div class="relative">
                         <div class="text-6xl mb-3 drop-shadow-lg">💎</div>
                         <h2 class="text-2xl font-black text-slate-800">ROBUX GACHA</h2>
-                        <div class="inline-block mt-2 bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full text-[10px] font-black border border-yellow-200">当選確率: 1/2</div>
+                        <div class="inline-block mt-2 bg-red-100 text-red-600 px-3 py-1 rounded-full text-[10px] font-black border border-red-200">当選確率: 1/999</div>
                     </div>
                     <div class="px-6">
                         <div class="w-full bg-slate-100 rounded-full h-3 p-0.5 overflow-hidden shadow-inner">
@@ -144,6 +148,7 @@
         let clicks = 0;
         const CLICKS_NEEDED = 10;
         let logs = [];
+        let totalDraws = 0; // 全員で同期する総抽選回数
         let winner = null;
         let pendingClaims = []; 
 
@@ -169,16 +174,17 @@
             peer.on('connection', (conn) => {
                 connections.push(conn);
                 setupConn(conn);
-                // ホスト側：接続が増えたら全員に現在の状態を同期
                 if (isHost) {
                     setTimeout(() => {
                         broadcast({ 
                             type: 'sync_all', 
                             logs, 
                             winner, 
-                            peerCount: connections.length + 1 // ホスト自身を含める
+                            totalDraws,
+                            peerCount: connections.length + 1
                         });
                         updatePeerCountDisplay(connections.length + 1);
+                        updateTotalDrawsDisplay(totalDraws);
                     }, 500);
                 }
             });
@@ -198,11 +204,12 @@
             });
 
             conn.on('data', (data) => {
-                // ホスト・ゲスト共通のデータ受信処理
                 if (data.type === 'sync_all') {
                     logs = data.logs;
                     winner = data.winner;
+                    totalDraws = data.totalDraws;
                     updatePeerCountDisplay(data.peerCount);
+                    updateTotalDrawsDisplay(totalDraws);
                     renderLogs();
                     if (winner) showWinner(winner);
                 }
@@ -213,9 +220,10 @@
 
                 if (data.type === 'miss_notice') {
                     if (isHost) {
-                        // ホストがハズレ履歴を追加して全員に再配信
+                        totalDraws++;
                         logs.unshift(data.logEntry);
-                        broadcast({ type: 'sync_all', logs, winner, peerCount: connections.length + 1 });
+                        broadcast({ type: 'sync_all', logs, winner, totalDraws, peerCount: connections.length + 1 });
+                        updateTotalDrawsDisplay(totalDraws);
                         renderLogs();
                     }
                 }
@@ -224,17 +232,20 @@
                     winner = null;
                     clicks = 0;
                     logs = [];
+                    totalDraws = 0;
                     document.getElementById('winner-screen').classList.add('hidden');
                     resetGachaUI();
                     renderLogs();
+                    updateTotalDrawsDisplay(0);
                 }
             });
 
             conn.on('close', () => {
                 connections = connections.filter(c => c !== conn);
                 if (isHost) {
-                    updatePeerCountDisplay(connections.length + 1);
-                    broadcast({ type: 'sync_all', logs, winner, peerCount: connections.length + 1 });
+                    const count = connections.length + 1;
+                    updatePeerCountDisplay(count);
+                    broadcast({ type: 'sync_all', logs, winner, totalDraws, peerCount: count });
                 }
             });
         }
@@ -249,11 +260,13 @@
                 const trueWinner = pendingClaims[0];
                 
                 winner = trueWinner.user;
+                totalDraws++; // 当選分もカウント
                 const timeStr = new Date(trueWinner.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
                 logs.unshift({ user: winner, isWin: true, timeStr });
                 
-                broadcast({ type: 'sync_all', logs, winner, peerCount: connections.length + 1 });
+                broadcast({ type: 'sync_all', logs, winner, totalDraws, peerCount: connections.length + 1 });
                 showWinner(winner);
+                updateTotalDrawsDisplay(totalDraws);
                 renderLogs();
                 pendingClaims = [];
             }, 100);
@@ -262,6 +275,10 @@
         function updatePeerCountDisplay(count) {
             const displayCount = count !== undefined ? count : (connections.length + (isHost ? 1 : 0));
             document.getElementById('peer-count-display').innerText = `接続数: ${displayCount}`;
+        }
+
+        function updateTotalDrawsDisplay(count) {
+            document.getElementById('total-draws-display').innerText = `総抽選: ${count}回`;
         }
 
         function broadcast(data) {
@@ -299,7 +316,7 @@
             
             setTimeout(() => {
                 const timestamp = Date.now();
-                const isWin = Math.random() < 0.5;
+                const isWin = Math.random() < (1 / 999);
                 const timeStr = new Date(timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
                 if (isWin) {
@@ -309,8 +326,10 @@
                 } else {
                     const logEntry = { user: username, isWin: false, timeStr };
                     if (isHost) {
+                        totalDraws++;
                         logs.unshift(logEntry);
-                        broadcast({ type: 'sync_all', logs, winner, peerCount: connections.length + 1 });
+                        broadcast({ type: 'sync_all', logs, winner, totalDraws, peerCount: connections.length + 1 });
+                        updateTotalDrawsDisplay(totalDraws);
                         renderLogs();
                     } else {
                         broadcast({ type: 'miss_notice', logEntry });
@@ -377,10 +396,12 @@
             winner = null;
             clicks = 0;
             logs = [];
+            totalDraws = 0;
             broadcast({ type: 'reset' });
             document.getElementById('winner-screen').classList.add('hidden');
             resetGachaUI();
             renderLogs();
+            updateTotalDrawsDisplay(0);
         }
 
         function createConfetti() {
